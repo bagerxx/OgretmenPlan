@@ -30,8 +30,9 @@ model Sinif {
   kademe  Kademe @relation(fields: [kademeId], references: [id], onDelete: Cascade)
   kademeId String
 
-  dersSaatleri DersSaat[]
-  planlar      Plan[]
+  dersSaatleri    DersSaat[]
+  planlar         Plan[]
+  dersProgramlari DersProgrami[]
 
   @@unique([seviye, kademeId])
   @@map("siniflar")
@@ -46,10 +47,11 @@ model Ders {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  dersSaatleri DersSaat[]
-  kazanimlar   Kazanim[]
-  beceriler    Beceri[]
-  planlar      Plan[]
+  dersSaatleri    DersSaat[]
+  kazanimlar      Kazanim[]
+  beceriler       Beceri[]
+  planlar         Plan[]
+  dersProgramlari DersProgrami[]
 
   @@map("dersler")
 }
@@ -207,38 +209,6 @@ model PlanBeceri {
   @@map("plan_becerileri")
 }
 
-// Haftalık Program Şablonları (İlkokul, Ortaokul, Lise)
-model ProgramSablonu {
-  id          String @id @default(cuid())
-  ad          String @unique // "İlkokul Program", "Ortaokul Program", "Lise Program"
-  aciklama    String?
-  kademeTipi  String // "ILKOKUL", "ORTAOKUL", "LISE"
-  gunlukDersSayisi Int // İlkokul: 6, Ortaokul: 7, Lise: 8
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  programSaatleri ProgramSaati[]
-
-  @@map("program_sablonlari")
-}
-
-// Program Saatleri (Gün-Ders slot'ları)
-model ProgramSaati {
-  id         String @id @default(cuid())
-  gun        String // "PAZARTESI", "SALI", "CARSAMBA", "PERSEMBE", "CUMA"
-  dersSirasi Int    // 1, 2, 3, 4, 5, 6, 7, 8
-  baslangic  String // "08:00"
-  bitis      String // "08:40"
-  
-  programSablonu ProgramSablonu @relation(fields: [programSablonuId], references: [id], onDelete: Cascade)
-  programSablonuId String
-  
-  sinifDefteri SinifDefteri[]
-
-  @@unique([programSablonuId, gun, dersSirasi])
-  @@map("program_saatleri")
-}
-
 // Sınıf Defteri (Haftalık program + kazanım eşleştirme)
 model SinifDefteri {
   id        String @id @default(cuid())
@@ -250,8 +220,8 @@ model SinifDefteri {
   haftaId   String
   
   // Program saati (hangi gün, hangi ders)
-  programSaati ProgramSaati @relation(fields: [programSaatiId], references: [id], onDelete: Cascade)
-  programSaatiId String
+  dersProgrami   DersProgrami @relation(fields: [dersProgramiId], references: [id], onDelete: Cascade)
+  dersProgramiId String
   
   // Kazanım/Beceri referansı (hangisi varsa)
   kazanim   Kazanim? @relation(fields: [kazanimId], references: [id], onDelete: Cascade)
@@ -267,7 +237,7 @@ model SinifDefteri {
 
   gunlukPlanlar GunlukPlan[]
 
-  @@unique([planId, haftaId, programSaatiId])
+  @@unique([planId, haftaId, dersProgramiId])
   @@map("sinif_defteri")
 }
 

@@ -1,122 +1,85 @@
-import { PrismaClient } from '@prisma/client'
-import { z } from 'zod'
+import { PrismaClient, DersGunu } from '@prisma/client'
 
-// Program Şablonu servisi
-export class ProgramSablonuService {
+// Yeni Ders Programı Şablon Servisi
+export class DersProgramiSablonuService {
   constructor(private prisma: PrismaClient) {}
 
-  /**
-   * Varsayılan program şablonlarını oluştur
-   */
-  async createDefaultSablonlar() {
-    // İlkokul Programı
-    const ilkokul = await this.prisma.programSablonu.upsert({
-      where: { ad: 'İlkokul Program' },
+  private defaultSaatler = [
+    { dersSaat: 1 },
+    { dersSaat: 2 },
+    { dersSaat: 3 },
+    { dersSaat: 4 },
+    { dersSaat: 5 },
+    { dersSaat: 6 },
+    { dersSaat: 7 },
+    { dersSaat: 8 }
+  ]
+
+  private gunler: DersGunu[] = ['PAZARTESI','SALI','CARSAMBA','PERSEMBE','CUMA']
+
+  async ensureDefaultSablonlar() {
+    const ilkokul = await this.prisma.dersProgramiSablonu.upsert({
+      where: { ad: 'İlkokul' },
       update: {},
-      create: {
-        ad: 'İlkokul Program',
-        aciklama: '1-4. sınıflar için haftalık ders programı',
-        kademeTipi: 'ILKOKUL',
-        gunlukDersSayisi: 6
-      }
+      create: { ad: 'İlkokul', aciklama: 'İlkokul haftalık ders programı', maxDersSaat: 6 }
+    })
+    const ortaokul = await this.prisma.dersProgramiSablonu.upsert({
+      where: { ad: 'Ortaokul' },
+      update: {},
+      create: { ad: 'Ortaokul', aciklama: 'Ortaokul haftalık ders programı', maxDersSaat: 7 }
+    })
+    const lise = await this.prisma.dersProgramiSablonu.upsert({
+      where: { ad: 'Lise' },
+      update: {},
+      create: { ad: 'Lise', aciklama: 'Lise haftalık ders programı', maxDersSaat: 8 }
     })
 
-    // Ortaokul Programı  
-    const ortaokul = await this.prisma.programSablonu.upsert({
-      where: { ad: 'Ortaokul Program' },
-      update: {},
-      create: {
-        ad: 'Ortaokul Program', 
-        aciklama: '5-8. sınıflar için haftalık ders programı',
-        kademeTipi: 'ORTAOKUL',
-        gunlukDersSayisi: 7
-      }
-    })
-
-    // Lise Programı
-    const lise = await this.prisma.programSablonu.upsert({
-      where: { ad: 'Lise Program' },
-      update: {},
-      create: {
-        ad: 'Lise Program',
-        aciklama: '9-12. sınıflar için haftalık ders programı', 
-        kademeTipi: 'LISE',
-        gunlukDersSayisi: 8
-      }
-    })
-
-    // Program saatlerini oluştur
-    await this.createProgramSaatleri(ilkokul.id, 6)
-    await this.createProgramSaatleri(ortaokul.id, 7) 
-    await this.createProgramSaatleri(lise.id, 8)
+    await Promise.all([
+      this.generateProgram(ilkokul.id, ilkokul.maxDersSaat),
+      this.generateProgram(ortaokul.id, ortaokul.maxDersSaat),
+      this.generateProgram(lise.id, lise.maxDersSaat)
+    ])
 
     return { ilkokul, ortaokul, lise }
   }
 
-  /**
-   * Program saatlerini oluştur
-   */
-  private async createProgramSaatleri(programSablonuId: string, dersSayisi: number) {
-    const gunler = ['PAZARTESI', 'SALI', 'CARSAMBA', 'PERSEMBE', 'CUMA']
-    const saatler = [
-      { ders: 1, baslangic: '08:00', bitis: '08:40' },
-      { ders: 2, baslangic: '08:50', bitis: '09:30' },
-      { ders: 3, baslangic: '09:40', bitis: '10:20' },
-      { ders: 4, baslangic: '10:40', bitis: '11:20' },
-      { ders: 5, baslangic: '11:30', bitis: '12:10' },
-      { ders: 6, baslangic: '13:00', bitis: '13:40' },
-      { ders: 7, baslangic: '13:50', bitis: '14:30' },
-      { ders: 8, baslangic: '14:40', bitis: '15:20' }
-    ]
-
-    for (const gun of gunler) {
-      for (let i = 0; i < dersSayisi; i++) {
-        const saat = saatler[i]
-        await this.prisma.programSaati.upsert({
+  private async generateProgram(sablonId: string, maxSaat: number) {
+    for (const gun of this.gunler) {
+      for (let i = 1; i <= maxSaat; i++) {
+        await this.prisma.dersProgrami.upsert({
           where: {
-            programSablonuId_gun_dersSirasi: {
-              programSablonuId,
+            sinifId_sablonId_gun_dersSaat: {
+              sinifId: 'PLACEHOLDER', // Sinif bağlanınca güncellenecek
+              sablonId,
               gun,
-              dersSirasi: saat.ders
+              dersSaat: i
             }
           },
           update: {},
           create: {
-            programSablonuId,
+            sinifId: 'PLACEHOLDER',
+            sablonId,
             gun,
-            dersSirasi: saat.ders,
-            baslangic: saat.baslangic,
-            bitis: saat.bitis
+            dersSaat: i
           }
         })
       }
     }
   }
 
-  /**
-   * Tüm program şablonlarını listele
-   */
-  async getAllSablonlar() {
-    return await this.prisma.programSablonu.findMany({
-      include: {
-        programSaatleri: {
-          orderBy: [{ gun: 'asc' }, { dersSirasi: 'asc' }]
-        }
-      }
+  async listSablonlar() {
+    return this.prisma.dersProgramiSablonu.findMany({
+      include: { dersProgramlari: { orderBy: [{ gun: 'asc' }, { dersSaat: 'asc' }] } }
     })
   }
 
-  /**
-   * Program şablonu detayı
-   */
-  async getSablonById(id: string) {
-    return await this.prisma.programSablonu.findUnique({
+  async getSablon(id: string) {
+    return this.prisma.dersProgramiSablonu.findUnique({
       where: { id },
-      include: {
-        programSaatleri: {
-          orderBy: [{ gun: 'asc' }, { dersSirasi: 'asc' }]
-        }
-      }
+      include: { dersProgramlari: { orderBy: [{ gun: 'asc' }, { dersSaat: 'asc' }] } }
     })
   }
 }
+
+// Geriye dönük uyumluluk için eski sınıf adı
+export class ProgramSablonuService extends DersProgramiSablonuService {}

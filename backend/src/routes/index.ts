@@ -8,6 +8,8 @@ import { KazanimService } from '../modules/kazanim/service'
 import { BeceriService } from '../modules/beceri/service'
 import { ExportService } from '../modules/export/service'
 import { ProgramSablonuService } from '../modules/program/service'
+import { DersProgramiService, CreateDersProgramiSchema, CreateDersProgramiSablonuSchema, UpdateDersProgramiSchema } from '../modules/dersProgrami/service'
+import { EmailService } from '../modules/email/service'
 import { SinifDefteriService } from '../modules/sinifDefteri/service'
 import { GunlukPlanService } from '../modules/gunlukPlan/service'
 import prisma from '../db/client'
@@ -67,8 +69,10 @@ const dersService = new DersService(prisma)
 const planService = new PlanService(prisma)
 const exportService = new ExportService(prisma)
 const programSablonuService = new ProgramSablonuService(prisma)
+const dersProgramiService = new DersProgramiService(prisma)
 const sinifDefteriService = new SinifDefteriService(prisma)
 const gunlukPlanService = new GunlukPlanService(prisma)
+const emailService = new EmailService(prisma)
 
 // Generic error handler
 async function handleError(reply: FastifyReply, error: any) {
@@ -329,8 +333,8 @@ export default async function routes(fastify: FastifyInstance) {
   // POST /api/program-sablonlari/default - Varsayılan şablonları oluştur
   fastify.post('/api/program-sablonlari/default', async (request, reply) => {
     try {
-      const result = await programSablonuService.createDefaultSablonlar()
-      return ResponseUtils.success(result, 'Varsayılan program şablonları oluşturuldu')
+  const result = await programSablonuService.ensureDefaultSablonlar()
+  return ResponseUtils.success(result, 'Varsayılan program şablonları hazır')
     } catch (error) {
       return handleError(reply, error)
     }
@@ -339,7 +343,7 @@ export default async function routes(fastify: FastifyInstance) {
   // GET /api/program-sablonlari - Tüm program şablonları
   fastify.get('/api/program-sablonlari', async (request, reply) => {
     try {
-      const sablonlar = await programSablonuService.getAllSablonlar()
+  const sablonlar = await programSablonuService.listSablonlar()
       return ResponseUtils.success(sablonlar)
     } catch (error) {
       return handleError(reply, error)
@@ -349,7 +353,7 @@ export default async function routes(fastify: FastifyInstance) {
   // GET /api/program-sablonlari/:id - Program şablonu detayı
   fastify.get<{ Params: { id: string } }>('/api/program-sablonlari/:id', async (request, reply) => {
     try {
-      const sablon = await programSablonuService.getSablonById(request.params.id)
+  const sablon = await programSablonuService.getSablon(request.params.id)
       return ResponseUtils.success(sablon)
     } catch (error) {
       return handleError(reply, error)
@@ -358,17 +362,11 @@ export default async function routes(fastify: FastifyInstance) {
 
   // =================== SINIF DEFTERİ ROUTES ===================
   
-  // POST /api/planlar/:planId/sinif-defteri - Sınıf defteri oluştur
-  fastify.post<{ 
-    Params: { planId: string }, 
-    Body: { programSablonuId: string } 
-  }>('/api/planlar/:planId/sinif-defteri', async (request, reply) => {
+  // POST /api/planlar/:planId/sinif-defteri - Sınıf defteri oluştur (otomatik)
+  fastify.post<{ Params: { planId: string } }>('/api/planlar/:planId/sinif-defteri', async (request, reply) => {
     try {
-      const result = await sinifDefteriService.createSinifDefteri(
-        request.params.planId, 
-        request.body.programSablonuId
-      )
-      return ResponseUtils.success(result, 'Sınıf defteri oluşturuldu')
+      const result = await sinifDefteriService.createSinifDefteri(request.params.planId)
+      return ResponseUtils.success(result, 'Sınıf defteri otomatik oluşturuldu')
     } catch (error) {
       return handleError(reply, error)
     }
@@ -384,6 +382,91 @@ export default async function routes(fastify: FastifyInstance) {
     }
   })
 
+  // =================== DERS PROGRAMI ROUTES ===================
+
+  // POST /api/ders-programi-sablonlari - Yeni şablon
+  fastify.post<{ Body: any }>('/api/ders-programi-sablonlari', async (request, reply) => {
+    try {
+      const body = CreateDersProgramiSablonuSchema.parse(request.body)
+      const sablon = await dersProgramiService.createSablon(body)
+      return ResponseUtils.success(sablon, 'Şablon oluşturuldu')
+    } catch (error) {
+      return handleError(reply, error)
+    }
+  })
+
+  // GET /api/ders-programi-sablonlari
+  fastify.get('/api/ders-programi-sablonlari', async (request, reply) => {
+    try {
+      const sablonlar = await dersProgramiService.getAllSablonlar()
+      return ResponseUtils.success(sablonlar)
+    } catch (error) {
+      return handleError(reply, error)
+    }
+  })
+
+  // DELETE /api/ders-programi-sablonlari/:id
+  fastify.delete<{ Params: { id: string } }>('/api/ders-programi-sablonlari/:id', async (request, reply) => {
+    try {
+      const result = await dersProgramiService.deleteSablon(request.params.id)
+      return ResponseUtils.success(result)
+    } catch (error) {
+      return handleError(reply, error)
+    }
+  })
+
+  // POST /api/ders-programi - Ders programı slot oluştur
+  fastify.post<{ Body: any }>('/api/ders-programi', async (request, reply) => {
+    try {
+      const body = CreateDersProgramiSchema.parse(request.body)
+      const program = await dersProgramiService.createDersProgrami(body)
+      return ResponseUtils.success(program, 'Ders programı kaydı oluşturuldu')
+    } catch (error) {
+      return handleError(reply, error)
+    }
+  })
+
+  // POST /api/ders-programi/empty - Sınıf için boş tablo üret
+  fastify.post<{ Body: { sablonId: string, sinifId: string } }>('/api/ders-programi/empty', async (request, reply) => {
+    try {
+      const { sablonId, sinifId } = request.body
+      const program = await dersProgramiService.createEmptyProgram(sablonId, sinifId)
+      return ResponseUtils.success(program, 'Boş ders programı üretildi')
+    } catch (error) {
+      return handleError(reply, error)
+    }
+  })
+
+  // GET /api/ders-programi/:sinifId/:sablonId - Haftalık tablo
+  fastify.get<{ Params: { sinifId: string, sablonId: string } }>('/api/ders-programi/:sinifId/:sablonId', async (request, reply) => {
+    try {
+      const tablo = await dersProgramiService.getHaftalikTablo(request.params.sinifId, request.params.sablonId)
+      return ResponseUtils.success(tablo)
+    } catch (error) {
+      return handleError(reply, error)
+    }
+  })
+
+  // PUT /api/ders-programi/:id - Slot güncelle
+  fastify.put<{ Params: { id: string }, Body: any }>('/api/ders-programi/:id', async (request, reply) => {
+    try {
+      const body = UpdateDersProgramiSchema.parse(request.body)
+      const program = await dersProgramiService.updateDersProgrami(request.params.id, body)
+      return ResponseUtils.success(program, 'Ders programı güncellendi')
+    } catch (error) {
+      return handleError(reply, error)
+    }
+  })
+
+  // DELETE /api/ders-programi/:id - Slot sil
+  fastify.delete<{ Params: { id: string } }>('/api/ders-programi/:id', async (request, reply) => {
+    try {
+      const result = await dersProgramiService.deleteDersProgrami(request.params.id)
+      return ResponseUtils.success(result)
+    } catch (error) {
+      return handleError(reply, error)
+    }
+  })
   // PUT /api/sinif-defteri/:id - Sınıf defteri kaydını güncelle
   fastify.put<{ 
     Params: { id: string }, 
@@ -507,6 +590,30 @@ export default async function routes(fastify: FastifyInstance) {
     }
   })
 
+  // GET /api/planlar/:id/export/pdf - Plan PDF
+  fastify.get<{ Params: { id: string } }>('/api/planlar/:id/export/pdf', async (request, reply) => {
+    try {
+      const pdf = await exportService.generatePDF(request.params.id)
+      reply.type('application/pdf')
+      reply.header('Content-Disposition', `attachment; filename=plan-${request.params.id}.pdf`)
+      return pdf
+    } catch (error) {
+      return handleError(reply, error)
+    }
+  })
+
+  // GET /api/planlar/:id/export/excel - Plan Excel
+  fastify.get<{ Params: { id: string } }>('/api/planlar/:id/export/excel', async (request, reply) => {
+    try {
+      const xls = await exportService.generateExcel(request.params.id)
+      reply.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      reply.header('Content-Disposition', `attachment; filename=plan-${request.params.id}.xlsx`)
+      return xls
+    } catch (error) {
+      return handleError(reply, error)
+    }
+  })
+
   // GET /api/planlar/:id/export/data - Plan verisi (PDF için)
   fastify.get<{ Params: { id: string } }>('/api/planlar/:id/export/data', async (request, reply) => {
     try {
@@ -516,6 +623,20 @@ export default async function routes(fastify: FastifyInstance) {
       return handleError(reply, error)
     }
   })
+
+  // POST /api/planlar/:id/email - Plan e-posta gönder
+  fastify.post<{ Params: { id: string }, Body: { to: string, format: 'pdf'|'excel'|'html' } }>(
+    '/api/planlar/:id/email',
+    async (request, reply) => {
+      try {
+        const { to, format } = request.body
+        const result = await emailService.sendPlanEmail(request.params.id, to, format)
+        return ResponseUtils.success(result, 'E-posta gönderildi')
+      } catch (error) {
+        return handleError(reply, error)
+      }
+    }
+  )
 
   // =================== HEALTH CHECK ===================
   

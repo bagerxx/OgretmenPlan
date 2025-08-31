@@ -24,7 +24,7 @@ export class GunlukPlanService {
         sinifDefteri: {
           include: {
             hafta: true,
-            programSaati: true,
+            dersProgrami: true,
             kazanim: true,
             beceri: true,
             plan: {
@@ -49,7 +49,7 @@ export class GunlukPlanService {
         sinifDefteri: {
           include: {
             hafta: true,
-            programSaati: true,
+            dersProgrami: true,
             kazanim: true,
             beceri: true
           }
@@ -80,7 +80,7 @@ export class GunlukPlanService {
         sinifDefteri: {
           include: {
             hafta: true,
-            programSaati: true,
+            dersProgrami: true,
             kazanim: true,
             beceri: true
           }
@@ -113,15 +113,15 @@ export class GunlukPlanService {
         sinifDefteri: {
           include: {
             hafta: true,
-            programSaati: true,
+      dersProgrami: true,
             kazanim: true,
             beceri: true
           }
         }
       },
       orderBy: [
-        { sinifDefteri: { programSaati: { gun: 'asc' } } },
-        { sinifDefteri: { programSaati: { dersSirasi: 'asc' } } }
+    { sinifDefteri: { dersProgrami: { gun: 'asc' } } },
+    { sinifDefteri: { dersProgrami: { dersSaat: 'asc' } } }
       ]
     })
   }
@@ -135,7 +135,7 @@ export class GunlukPlanService {
       include: {
         kazanim: true,
         beceri: true,
-        programSaati: true,
+  dersProgrami: true,
         hafta: true,
         plan: {
           include: {

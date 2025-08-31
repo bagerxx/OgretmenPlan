@@ -181,4 +181,51 @@ export class ExportService {
 </html>
     `
   }
+
+  async generatePDF(planId: string): Promise<Buffer> {
+    const data = await this.getYillikPlanData(planId)
+    const PDFDocument = require('pdfkit')
+    const doc = new PDFDocument({ margin: 40 })
+    const buffers: Buffer[] = []
+    doc.on('data', (b: Buffer) => buffers.push(b))
+    const title = `${data.plan.egitiYili} ${data.plan.sinif.seviye}. Sınıf ${data.plan.ders.ad} Yıllık Planı`
+    doc.fontSize(16).text(title, { align: 'center' })
+    doc.moveDown()
+    doc.fontSize(10).text(`Plan Adı: ${data.plan.ad}`)
+    doc.text(`Toplam Hafta: ${data.ozet.toplamHafta} | Ders Haftası: ${data.ozet.dersHaftasi} | Tatil Haftası: ${data.ozet.tatilHaftasi} | Toplam Saat: ${data.ozet.toplamSaat}`)
+    doc.moveDown()
+    data.haftalar.forEach((h) => {
+      doc.fontSize(11).fillColor('#000').text(`Hafta ${h.numara} (${new Date(h.baslangic).toLocaleDateString('tr-TR')} - ${new Date(h.bitis).toLocaleDateString('tr-TR')}) - ${h.durum}`)
+      h.kazanimlar.forEach(k => {
+        doc.fontSize(9).fillColor('#333').text(`• ${k.kod} (${k.sure} saat): ${k.icerik}`)
+      })
+      doc.moveDown(0.5)
+    })
+    doc.end()
+    await new Promise(res => doc.on('end', res))
+    return Buffer.concat(buffers)
+  }
+
+  async generateExcel(planId: string): Promise<Buffer> {
+    const data = await this.getYillikPlanData(planId)
+    const ExcelJS = require('exceljs')
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet('Yıllık Plan')
+    ws.addRow([`${data.plan.egitiYili} ${data.plan.sinif.seviye}. Sınıf ${data.plan.ders.ad} Yıllık Planı`])
+    ws.mergeCells('A1','F1')
+    ws.addRow([])
+    ws.addRow(['Hafta','Başlangıç','Bitiş','Durum','Kazanım Kod / İçerik','Süre'])
+    data.haftalar.forEach(h => {
+      if (h.kazanimlar.length === 0) {
+        ws.addRow([h.numara, new Date(h.baslangic), new Date(h.bitis), h.durum,'-',0])
+      } else {
+        h.kazanimlar.forEach(k => {
+          ws.addRow([h.numara, new Date(h.baslangic), new Date(h.bitis), h.durum, `${k.kod} - ${k.icerik}`, k.sure])
+        })
+      }
+    })
+  ws.columns.forEach((c: any) => { if (c) c.width = 22 })
+    const buf = await wb.xlsx.writeBuffer()
+    return Buffer.from(buf)
+  }
 }
