@@ -10,300 +10,301 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Kademeler (Okul seviyeleri: İlkokul, Ortaokul, Lise)
-model Kademe {
-  id        String   @id @default(cuid())
-  ad        String   @unique
-  aciklama  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  siniflar Sinif[]
-
-  @@map("kademeler")
-}
-
-// Sınıflar (1-12 arası sınıf seviyeleri)
+// Sınıf seviyeleri (1. sınıf, 2. sınıf vb.)
 model Sinif {
-  id      String @id @default(cuid())
-  seviye  Int    // 1-12 arası
-  kademe  Kademe @relation(fields: [kademeId], references: [id], onDelete: Cascade)
-  kademeId String
-
-  dersSaatleri    DersSaat[]
-  planlar         Plan[]
-  dersProgramlari DersProgrami[]
-
-  @@unique([seviye, kademeId])
-  @@map("siniflar")
+  id          String @id @default(cuid())
+  seviye      Int    @unique // 1, 2, 3, 4, 5 (sınıf seviyeleri)
+  aciklama    String // "1. Sınıf", "2. Sınıf" vb.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // İlişkiler
+  dersler     Ders[]
+  
+  @@map("sinif")
 }
 
-// Dersler
+// Dersler (her sınıf seviyesi için ayrı dersler)
 model Ders {
-  id        String   @id @default(cuid())
-  ad        String   @unique
-  aciklama  String?
-  tip       DersTipi @default(KAZANIM_BAZLI) // KAZANIM_BAZLI veya BECERI_BAZLI
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  dersSaatleri    DersSaat[]
-  kazanimlar      Kazanim[]
-  beceriler       Beceri[]
+  id              String  @id @default(cuid())
+  ad              String  // "Matematik", "Türkçe" vb.
+  haftalikSaat    Int     // Dersin haftalık saati
+  sinifId         String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // İlişkiler
+  sinif           Sinif    @relation(fields: [sinifId], references: [id], onDelete: Cascade)
+  temalar         Tema[]
   planlar         Plan[]
   dersProgramlari DersProgrami[]
-
-  @@map("dersler")
+  sinifDefteriKayitlari SinifDefteriKayit[]
+  planSablonlari  PlanSablonu[]
+  
+  @@unique([ad, sinifId]) // Aynı sınıfta aynı ders adı olamaz
+  @@map("ders")
 }
 
-enum DersTipi {
-  KAZANIM_BAZLI
-  BECERI_BAZLI
-}
-
-// Ders saatleri (her sınıf için farklı olabilir)
-model DersSaat {
-  id           String @id @default(cuid())
-  haftalikSaat Int    // Haftalık ders saati
-  ders         Ders   @relation(fields: [dersId], references: [id], onDelete: Cascade)
-  dersId       String
-  sinif        Sinif  @relation(fields: [sinifId], references: [id], onDelete: Cascade)
-  sinifId      String
-
-  @@unique([dersId, sinifId])
-  @@map("ders_saatleri")
-}
-
-// Kazanımlar (eski müfredat)
-model Kazanim {
-  id        String   @id @default(cuid())
-  kod       String   @unique
-  icerik    String
-  aciklama  String?
-  ders      Ders     @relation(fields: [dersId], references: [id], onDelete: Cascade)
-  dersId    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  planKazanimlari PlanKazanim[]
-  sinifDefteri    SinifDefteri[]
-
-  @@map("kazanimlar")
-}
-
-// Temalar (yeni müfredat için)
+// Temalar (derslerin temel konuları)
 model Tema {
-  id        String   @id @default(cuid())
-  ad        String   @unique
-  aciklama  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  beceriler Beceri[]
-
-  @@map("temalar")
+  id          String @id @default(cuid())
+  ad          String // "Sayılar", "Geometri" vb.
+  sira        Int    // Tema sırası
+  dersId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // İlişkiler
+  ders        Ders     @relation(fields: [dersId], references: [id], onDelete: Cascade)
+  beceriler   Beceri[]
+  kazanimlar  Kazanim[]
+  
+  @@unique([dersId, sira])
+  @@map("tema")
 }
 
-// Beceriler (yeni müfredat, temalara bağlı)
+// Beceriler (her temanın altındaki beceriler - YENİ PROGRAM)
 model Beceri {
-  id             String   @id @default(cuid())
-  ad             String
-  aciklama       String?
-  toplamOgrenmeS Int      // Toplam öğrenme saati
-  tema           Tema     @relation(fields: [temaId], references: [id], onDelete: Cascade)
-  temaId         String
-  ders           Ders     @relation(fields: [dersId], references: [id], onDelete: Cascade)
-  dersId         String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  planBecerileri PlanBeceri[]
-  sinifDefteri   SinifDefteri[]
-
-  @@unique([ad, temaId, dersId])
-  @@map("beceriler")
+  id          String @id @default(cuid())
+  ad          String // Beceri adı
+  saatSuresi  Int    // Bu becerinin tamamlanması için gereken saat
+  sira        Int    // Beceri sırası
+  temaId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // İlişkiler
+  tema        Tema     @relation(fields: [temaId], references: [id], onDelete: Cascade)
+  planDetaylari PlanDetay[]
+  sinifDefteriKayitlari SinifDefteriKayit[]
+  planSablonlari PlanSablonu[]
+  
+  @@unique([temaId, sira])
+  @@map("beceri")
 }
 
-// Haftalar (eğitim yılı boyunca)
+// Kazanımlar (her temanın altındaki kazanımlar - ESKİ PROGRAM)
+model Kazanim {
+  id          String @id @default(cuid())
+  ad          String // Kazanım adı
+  saatSuresi  Int    // Bu kazanımın tamamlanması için gereken saat
+  sira        Int    // Kazanım sırası
+  temaId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // İlişkiler
+  tema        Tema     @relation(fields: [temaId], references: [id], onDelete: Cascade)
+  planDetaylari PlanDetay[]
+  sinifDefteriKayitlari SinifDefteriKayit[]
+  planSablonlari PlanSablonu[]
+  
+  @@unique([temaId, sira])
+  @@map("kazanim")
+}
+
+// Yıl tanımları
+model Yil {
+  id          String @id @default(cuid())
+  yil         Int    @unique // 2025, 2026 vb.
+  aciklama    String // "2025-2026 Eğitim Öğretim Yılı"
+  baslamaTarihi DateTime
+  bitisTarihi DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // İlişkiler
+  haftalar    Hafta[]
+  planlar     Plan[]
+  planSablonlari PlanSablonu[]
+  
+  @@map("yil")
+}
+
+// Hafta aralıkları (her yıl için tanımlanır)
 model Hafta {
-  id         String      @id @default(cuid())
-  numara     Int         // Hafta numarası (1-40 arası)
-  baslangic  DateTime    // Hafta başlangıç tarihi
-  bitis      DateTime    // Hafta bitiş tarihi
-  durum      HaftaDurum  @default(LESSON)
-  aciklama   String?     // Tatil adı, sınav türü vb.
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-
-  planKazanimlari PlanKazanim[]
-  planBecerileri  PlanBeceri[]
-  sinifDefteri    SinifDefteri[]
-
-  @@unique([numara])
-  @@map("haftalar")
+  id          String @id @default(cuid())
+  haftaNo     Int    // 1, 2, 3... (yıl içindeki hafta sırası)
+  baslamaTarihi DateTime
+  bitisTarihi DateTime
+  tip         HaftaTipi @default(DERS) // DERS, TATIL, SINAV
+  aciklama    String? // "1. Hafta", "Yarıyıl Tatili" vb.
+  yilId       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // İlişkiler
+  yil         Yil      @relation(fields: [yilId], references: [id], onDelete: Cascade)
+  planDetaylari PlanDetay[]
+  planSablonlari PlanSablonu[]
+  
+  @@unique([yilId, haftaNo])
+  @@map("hafta")
 }
 
-enum HaftaDurum {
-  LESSON    // İş olan hafta (ders işlenen)
-  HOLIDAY   // Tatil
-  EXAM      // Sınav
-  WORK      // İş/etkinlik haftası
+// Hafta tipleri
+enum HaftaTipi {
+  DERS    // Normal ders haftası
+  TATIL   // Tatil haftası
+  SINAV   // Sınav haftası
 }
 
-// Ana plan tablosu
+// Ana plan tablosu (yıllık, haftalık, günlük planlar için)
 model Plan {
-  id        String   @id @default(cuid())
-  ad        String
-  aciklama  String?
-  egitiYili String   // "2024-2025"
-  sinif     Sinif    @relation(fields: [sinifId], references: [id], onDelete: Cascade)
-  sinifId   String
-  ders      Ders     @relation(fields: [dersId], references: [id], onDelete: Cascade)
-  dersId    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  planKazanimlari PlanKazanim[]
-  planBecerileri  PlanBeceri[]
-  sinifDefteri    SinifDefteri[]
-
-  @@unique([sinifId, dersId, egitiYili])
-  @@map("planlar")
+  id          String @id @default(cuid())
+  ad          String // Plan adı
+  tip         PlanTipi // YILLIK, HAFTALIK, GUNLUK
+  dersId      String
+  yilId       String
+  kullaniciId String? // Hangi kullanıcının planı (null ise genel şablon)
+  aktif       Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // İlişkiler
+  ders        Ders     @relation(fields: [dersId], references: [id], onDelete: Cascade)
+  yil         Yil      @relation(fields: [yilId], references: [id], onDelete: Cascade)
+  detaylar    PlanDetay[]
+  
+  @@map("plan")
 }
 
-// Plan-kazanım ilişkisi (haftalık dağılım)
-model PlanKazanim {
-  id         String   @id @default(cuid())
-  plan       Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
-  planId     String
-  kazanim    Kazanim  @relation(fields: [kazanimId], references: [id], onDelete: Cascade)
-  kazanimId  String
-  hafta      Hafta    @relation(fields: [haftaId], references: [id], onDelete: Cascade)
-  haftaId    String
-  sure       Int      // Bu kazanıma ayrılan süre (saat)
-  tamamlandi Boolean  @default(false)
-  notlar     String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@unique([planId, kazanimId, haftaId])
-  @@map("plan_kazanimlari")
+// Plan tipleri
+enum PlanTipi {
+  YILLIK    // Yıllık plan
+  HAFTALIK  // Haftalık plan  
+  GUNLUK    // Günlük plan
 }
 
-// Plan-beceri ilişkisi (haftalık dağılım)
-model PlanBeceri {
-  id         String   @id @default(cuid())
-  plan       Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
-  planId     String
-  beceri     Beceri   @relation(fields: [beceriId], references: [id], onDelete: Cascade)
-  beceriId   String
-  hafta      Hafta    @relation(fields: [haftaId], references: [id], onDelete: Cascade)
-  haftaId    String
-  sure       Int      // Bu beceriye ayrılan süre (saat)
-  tamamlandi Boolean  @default(false)
-  notlar     String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+// Plan şablonu - yıl başında hesaplanan dağıtım (ANA TABLO)
+model PlanSablonu {
+  id          String @id @default(cuid())
+  dersId      String
+  yilId       String
+  programTipi ProgramTipi // YENI_PROGRAM, ESKI_PROGRAM
+  beceriId    String? // Yeni program için beceri
+  kazanimId   String? // Eski program için kazanım
+  haftaId     String
+  saat        Int    // Bu haftada bu beceri/kazanıma ayrılan saat
+  sira        Int    // Bu beceri/kazanımın sırası
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // İlişkiler
+  ders        Ders     @relation(fields: [dersId], references: [id], onDelete: Cascade)
+  yil         Yil      @relation(fields: [yilId], references: [id], onDelete: Cascade)
+  beceri      Beceri?  @relation(fields: [beceriId], references: [id], onDelete: Cascade)
+  kazanim     Kazanim? @relation(fields: [kazanimId], references: [id], onDelete: Cascade)
+  hafta       Hafta    @relation(fields: [haftaId], references: [id], onDelete: Cascade)
+  
+  @@unique([dersId, yilId, programTipi, beceriId, haftaId])
+  @@unique([dersId, yilId, programTipi, kazanimId, haftaId])
+  @@map("plan_sablonu")
+}
 
+// Program tipleri
+enum ProgramTipi {
+  YENI_PROGRAM  // Beceri bazlı
+  ESKI_PROGRAM  // Kazanım bazlı
+}
+
+// Plan detayları (kullanıcıya özel planlar - şablondan kopyalanır)
+model PlanDetay {
+  id          String @id @default(cuid())
+  planId      String
+  beceriId    String? // Yeni program için beceri
+  kazanimId   String? // Eski program için kazanım
+  haftaId     String
+  saat        Int    // Bu haftada bu beceri/kazanıma ayrılan saat
+  tamamlandi  Boolean @default(false)
+  notlar      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // İlişkiler
+  plan        Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  beceri      Beceri?  @relation(fields: [beceriId], references: [id], onDelete: Cascade)
+  kazanim     Kazanim? @relation(fields: [kazanimId], references: [id], onDelete: Cascade)
+  hafta       Hafta    @relation(fields: [haftaId], references: [id], onDelete: Cascade)
+  
   @@unique([planId, beceriId, haftaId])
-  @@map("plan_becerileri")
+  @@unique([planId, kazanimId, haftaId])
+  @@map("plan_detay")
 }
 
-// Sınıf Defteri (Haftalık program + kazanım eşleştirme)
-model SinifDefteri {
-  id        String @id @default(cuid())
+// Günler (Pazartesi, Salı vb.)
+model Gun {
+  id          String @id @default(cuid())
+  ad          String @unique // "Pazartesi", "Salı" vb.
+  sira        Int    @unique // 1, 2, 3, 4, 5, 6, 7
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   
-  // Plan referansları
-  plan      Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
-  planId    String
-  hafta     Hafta  @relation(fields: [haftaId], references: [id], onDelete: Cascade)
-  haftaId   String
-  
-  // Program saati (hangi gün, hangi ders)
-  dersProgrami   DersProgrami @relation(fields: [dersProgramiId], references: [id], onDelete: Cascade)
-  dersProgramiId String
-  
-  // Kazanım/Beceri referansı (hangisi varsa)
-  kazanim   Kazanim? @relation(fields: [kazanimId], references: [id], onDelete: Cascade)
-  kazanimId String?
-  beceri    Beceri?  @relation(fields: [beceriId], references: [id], onDelete: Cascade)
-  beceriId  String?
-  
-  // Durum bilgileri
-  tamamlandi Boolean @default(false)
-  notlar     String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  gunlukPlanlar GunlukPlan[]
-
-  @@unique([planId, haftaId, dersProgramiId])
-  @@map("sinif_defteri")
-}
-
-// Günlük Plan (O haftaki derslerin detaylı planı)
-model GunlukPlan {
-  id         String @id @default(cuid())
-  
-  sinifDefteri SinifDefteri @relation(fields: [sinifDefteriId], references: [id], onDelete: Cascade)
-  sinifDefteriId String
-  
-  // Plan detayları
-  konu       String  // Ana konu başlığı
-  hedefler   String? // Dersin hedefleri
-  yontemler  String? // Öğretim yöntemleri
-  materyaller String? // Kullanılacak materyaller
-  etkinlikler String? // Sınıf etkinlikleri
-  degerlendirme String? // Değerlendirme yöntemi
-  odev       String? // Ev ödevi
-  
-  // Durum
-  tamamlandi Boolean @default(false)
-  notlar     String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@map("gunluk_planlar")
-}
-
-// Haftalık Ders Programı Şablonları (İlkokul, Ortaokul, Lise)
-model DersProgramiSablonu {
-  id          String           @id @default(cuid())
-  ad          String           @unique // "İlkokul", "Ortaokul", "Lise"
-  aciklama    String?
-  maxDersSaat Int              // Günlük maksimum ders saati
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-
+  // İlişkiler
   dersProgramlari DersProgrami[]
-
-  @@map("ders_programi_sablonlari")
+  sinifDefteriKayitlari SinifDefteriKayit[]
+  
+  @@map("gun")
 }
 
-// Günlük Ders Programı (Pazartesi-Cuma, 1-8 ders saati)
+// Ders saatleri (1. saat, 2. saat vb.)
+model DersSaati {
+  id          String @id @default(cuid())
+  saat        Int    @unique // 1, 2, 3, 4, 5, 6, 7, 8
+  baslamaSaati String // "08:00"
+  bitisSaati  String // "08:40"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // İlişkiler
+  dersProgramlari DersProgrami[]
+  sinifDefteriKayitlari SinifDefteriKayit[]
+  
+  @@map("ders_saati")
+}
+
+// Kullanıcının ders programı (hangi gün hangi saatte hangi dersi yapıyor)
 model DersProgrami {
-  id        String    @id @default(cuid())
-  gun       DersGunu  // PAZARTESI, SALI, vs.
-  dersSaat  Int       // 1, 2, 3, 4, 5, 6, 7, 8
-  sinif     Sinif     @relation(fields: [sinifId], references: [id], onDelete: Cascade)
-  sinifId   String
-  ders      Ders?     @relation(fields: [dersId], references: [id], onDelete: SetNull)
-  dersId    String?
-  sablon    DersProgramiSablonu @relation(fields: [sablonId], references: [id], onDelete: Cascade)
-  sablonId  String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  sinifDefterleri SinifDefteri[]
-
-  @@unique([sinifId, sablonId, gun, dersSaat])
-  @@map("ders_programlari")
+  id          String @id @default(cuid())
+  kullaniciId String // Öğretmenin ID'si
+  dersId      String
+  gunId       String
+  dersSaatiId String
+  aktif       Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // İlişkiler
+  ders        Ders     @relation(fields: [dersId], references: [id], onDelete: Cascade)
+  gun         Gun      @relation(fields: [gunId], references: [id], onDelete: Cascade)
+  dersSaati   DersSaati @relation(fields: [dersSaatiId], references: [id], onDelete: Cascade)
+  
+  @@unique([kullaniciId, gunId, dersSaatiId]) // Aynı kişi aynı gün aynı saatte birden fazla ders veremez
+  @@map("ders_programi")
 }
 
-enum DersGunu {
-  PAZARTESI
-  SALI
-  CARSAMBA
-  PERSEMBE
-  CUMA
+// Sınıf defteri kayıtları
+model SinifDefteriKayit {
+  id          String @id @default(cuid())
+  kullaniciId String // Öğretmenin ID'si
+  dersId      String
+  gunId       String
+  dersSaatiId String
+  beceriId    String? // Yeni program - hangi beceri işlendiği (opsiyonel)
+  kazanimId   String? // Eski program - hangi kazanım işlendiği (opsiyonel)
+  konu        String  // İşlenen konu
+  aciklama    String? // Ek açıklamalar
+  tarih       DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // İlişkiler
+  ders        Ders      @relation(fields: [dersId], references: [id], onDelete: Cascade)
+  gun         Gun       @relation(fields: [gunId], references: [id], onDelete: Cascade)
+  dersSaati   DersSaati @relation(fields: [dersSaatiId], references: [id], onDelete: Cascade)
+  beceri      Beceri?   @relation(fields: [beceriId], references: [id], onDelete: SetNull)
+  kazanim     Kazanim?  @relation(fields: [kazanimId], references: [id], onDelete: SetNull)
+  
+  @@unique([kullaniciId, dersId, gunId, dersSaatiId, tarih])
+  @@map("sinif_defteri_kayit")
 }

@@ -12,6 +12,7 @@ import { DersProgramiService, CreateDersProgramiSchema, CreateDersProgramiSablon
 import { EmailService } from '../modules/email/service'
 import { SinifDefteriService } from '../modules/sinifDefteri/service'
 import { GunlukPlanService } from '../modules/gunlukPlan/service'
+import planRoutes from './planRoutes'
 import prisma from '../db/client'
 import { ResponseUtils } from '../utils'
 
@@ -28,8 +29,8 @@ const UpdateKademeSchema = z.object({
 
 const CreateDersSchema = z.object({
   ad: z.string(),
-  tip: z.enum(['KAZANIM_BAZLI', 'BECERI_BAZLI']),
-  aciklama: z.string().optional()
+  haftalikSaat: z.number().min(1),
+  sinifId: z.string()
 })
 
 const UpdateDersSchema = z.object({
@@ -152,7 +153,7 @@ export default async function routes(fastify: FastifyInstance) {
   // GET /api/dersler - Tüm dersleri listele
   fastify.get('/api/dersler', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const dersler = await dersService.getAllDersler()
+  const dersler = await dersService.findAll()
       return ResponseUtils.success(dersler)
     } catch (error) {
       return handleError(reply, error)
@@ -162,7 +163,7 @@ export default async function routes(fastify: FastifyInstance) {
   // GET /api/dersler/:id - Ders detayı
   fastify.get<{ Params: { id: string } }>('/api/dersler/:id', async (request, reply) => {
     try {
-      const ders = await dersService.getDersById(request.params.id)
+  const ders = await dersService.findById(request.params.id)
       return ResponseUtils.success(ders)
     } catch (error) {
       return handleError(reply, error)
@@ -172,8 +173,9 @@ export default async function routes(fastify: FastifyInstance) {
   // POST /api/dersler - Yeni ders oluştur
   fastify.post<{ Body: z.infer<typeof CreateDersSchema> }>('/api/dersler', async (request, reply) => {
     try {
-      const validatedBody = CreateDersSchema.parse(request.body)
-      const ders = await dersService.createDers(validatedBody)
+      // tip ve aciklama parametresi artık yok
+      const { ad, haftalikSaat, sinifId } = request.body
+      const ders = await dersService.create({ ad, haftalikSaat: Number(haftalikSaat), sinifId })
       return ResponseUtils.success(ders, 'Ders başarıyla oluşturuldu')
     } catch (error) {
       return handleError(reply, error)
@@ -184,7 +186,7 @@ export default async function routes(fastify: FastifyInstance) {
   fastify.put<{ Params: { id: string }, Body: z.infer<typeof UpdateDersSchema> }>('/api/dersler/:id', async (request, reply) => {
     try {
       const validatedBody = UpdateDersSchema.parse(request.body)
-      const ders = await dersService.updateDers(request.params.id, validatedBody)
+  const ders = await dersService.update(request.params.id, validatedBody)
       return ResponseUtils.success(ders, 'Ders başarıyla güncellendi')
     } catch (error) {
       return handleError(reply, error)
@@ -194,43 +196,14 @@ export default async function routes(fastify: FastifyInstance) {
   // DELETE /api/dersler/:id - Ders sil
   fastify.delete<{ Params: { id: string } }>('/api/dersler/:id', async (request, reply) => {
     try {
-      const result = await dersService.deleteDers(request.params.id)
+  const result = await dersService.delete(request.params.id)
       return ResponseUtils.success(result)
     } catch (error) {
       return handleError(reply, error)
     }
   })
 
-  // POST /api/dersler/:id/saatler - Ders saati ekle/güncelle
-  fastify.post<{ Params: { id: string }, Body: z.infer<typeof SetDersSaatiSchema> }>('/api/dersler/:id/saatler', async (request, reply) => {
-    try {
-      const validatedBody = SetDersSaatiSchema.parse(request.body)
-      const dersSaat = await dersService.setDersSaati(request.params.id, validatedBody)
-      return ResponseUtils.success(dersSaat, 'Ders saati başarıyla ayarlandı')
-    } catch (error) {
-      return handleError(reply, error)
-    }
-  })
-
-  // DELETE /api/dersler/:dersId/saatler/:sinifId - Ders saati sil
-  fastify.delete<{ Params: { dersId: string, sinifId: string } }>('/api/dersler/:dersId/saatler/:sinifId', async (request, reply) => {
-    try {
-      const result = await dersService.deleteDersSaati(request.params.dersId, request.params.sinifId)
-      return ResponseUtils.success(result)
-    } catch (error) {
-      return handleError(reply, error)
-    }
-  })
-
-  // GET /api/kademeler/:id/ders-saatleri - Kademeye göre ders saatleri
-  fastify.get<{ Params: { id: string } }>('/api/kademeler/:id/ders-saatleri', async (request, reply) => {
-    try {
-      const dersSaatleri = await dersService.getDersSaatleriByKademe(request.params.id)
-      return ResponseUtils.success(dersSaatleri)
-    } catch (error) {
-      return handleError(reply, error)
-    }
-  })
+  // ...Ders saati ile ilgili endpointler yeni şemada yok, kaldırıldı
 
   // =================== PLAN ROUTES ===================
   
@@ -400,6 +373,131 @@ export default async function routes(fastify: FastifyInstance) {
     try {
       const sablonlar = await dersProgramiService.getAllSablonlar()
       return ResponseUtils.success(sablonlar)
+    } catch (error) {
+      return handleError(reply, error)
+    }
+  })
+
+  // =================== ADMIN SIMPLE HTML FORM ===================
+  // GET /admin - Basit admin formu (JS ile JSON POST yapar)
+  fastify.get('/admin', async (request, reply) => {
+    const html = `
+      <html>
+      <head><meta charset="utf-8"/><title>Admin - Veri Ekle</title></head>
+      <body style="font-family: Arial; padding:20px;">
+        <h2>Yeni Kayıt Ekle</h2>
+        <div>
+          <h3>Kademe</h3>
+          <input id="kademe_ad" placeholder="Kademe adı" /> <input id="kademe_aciklama" placeholder="Açıklama" />
+          <button onclick="post('/admin/kademe', {ad:document.getElementById('kademe_ad').value, aciklama:document.getElementById('kademe_aciklama').value})">Ekle</button>
+        </div>
+
+        <div>
+          <h3>Sınıf</h3>
+          <input id="sinif_kademeId" placeholder="Kademe ID" /> <input id="sinif_seviye" placeholder="Sınıf seviye (sayı)" />
+          <button onclick="post('/admin/sinif', {kademeId:document.getElementById('sinif_kademeId').value, seviye:document.getElementById('sinif_seviye').value})">Ekle</button>
+        </div>
+
+        <div>
+          <h3>Ders</h3>
+          <input id="ders_ad" placeholder="Ders adı" />
+          <select id="ders_tip"><option value="KAZANIM_BAZLI">Kazanım Bazlı</option><option value="BECERI_BAZLI">Beceri Bazlı</option></select>
+          <button onclick="post('/admin/ders', {ad:document.getElementById('ders_ad').value, tip:document.getElementById('ders_tip').value})">Ekle</button>
+        </div>
+
+        <div>
+          <h3>Kazanim</h3>
+          <input id="kazanim_kod" placeholder="Kod" /> <input id="kazanim_icerik" placeholder="İçerik" /> <input id="kazanim_dersId" placeholder="Ders ID" />
+          <button onclick="post('/admin/kazanim', {kod:document.getElementById('kazanim_kod').value, icerik:document.getElementById('kazanim_icerik').value, dersId:document.getElementById('kazanim_dersId').value})">Ekle</button>
+        </div>
+
+        <div>
+          <h3>Tema</h3>
+          <input id="tema_ad" placeholder="Tema adı" /> <input id="tema_aciklama" placeholder="Açıklama" />
+          <button onclick="post('/admin/tema', {ad:document.getElementById('tema_ad').value, aciklama:document.getElementById('tema_aciklama').value})">Ekle</button>
+        </div>
+
+        <div>
+          <h3>Beceri</h3>
+          <input id="beceri_ad" placeholder="Beceri adı" /> <input id="beceri_toplam" placeholder="Toplam öğrenme saati" />
+          <input id="beceri_temaId" placeholder="Tema ID" /> <input id="beceri_dersId" placeholder="Ders ID" />
+          <button onclick="post('/admin/beceri', {ad:document.getElementById('beceri_ad').value, toplamOgrenmeS:document.getElementById('beceri_toplam').value, temaId:document.getElementById('beceri_temaId').value, dersId:document.getElementById('beceri_dersId').value})">Ekle</button>
+        </div>
+
+        <pre id="out" style="margin-top:20px;color:green"></pre>
+
+        <script>
+          async function post(url, body){
+            try{
+              const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
+              const t = await r.text()
+              document.getElementById('out').innerText = 'Başarılı' + (t?('\n'+t):'')
+            }catch(e){ document.getElementById('out').innerText = 'Hata: '+e.message }
+          }
+        </script>
+      </body>
+      </html>
+    `
+    reply.type('text/html').send(html)
+  })
+
+  // Simple form handlers (x-www-form-urlencoded)
+  fastify.post('/admin/kademe', async (request, reply) => {
+    try {
+      const body: any = await request.body as any
+      const kademe = await kademeService.createKademe({ ad: body.ad, aciklama: body.aciklama })
+      return reply.redirect('/admin')
+    } catch (error) {
+      return handleError(reply, error)
+    }
+  })
+
+  fastify.post('/admin/sinif', async (request, reply) => {
+    try {
+      const body: any = await request.body as any
+      const sinif = await kademeService.addSinifToKademe(body.kademeId, Number(body.seviye))
+      return reply.redirect('/admin')
+    } catch (error) {
+      return handleError(reply, error)
+    }
+  })
+
+  fastify.post('/admin/ders', async (request, reply) => {
+    try {
+      const body: any = await request.body as any
+      const ders = await dersService.create({ ad: body.ad, haftalikSaat: Number(body.haftalikSaat), sinifId: body.sinifId })
+      return reply.redirect('/admin')
+    } catch (error) {
+      return handleError(reply, error)
+    }
+  })
+
+  fastify.post('/admin/kazanim', async (request, reply) => {
+    try {
+      const body: any = await request.body as any
+      const kazanim = await new KazanimService(prisma).createKazanim({ kod: body.kod, icerik: body.icerik, aciklama: body.aciklama, dersId: body.dersId })
+      return reply.redirect('/admin')
+    } catch (error) {
+      return handleError(reply, error)
+    }
+  })
+
+  fastify.post('/admin/tema', async (request, reply) => {
+    try {
+      const body: any = await request.body as any
+      const tema = await new (require('../modules/tema/service').TemaService)(prisma).createTema({ ad: body.ad, aciklama: body.aciklama })
+      return reply.redirect('/admin')
+    } catch (error) {
+      return handleError(reply, error)
+    }
+  })
+
+  fastify.post('/admin/beceri', async (request, reply) => {
+    try {
+      const body: any = await request.body as any
+      const bs = new BeceriService(prisma)
+      const beceri = await bs.createBeceri({ ad: body.ad, aciklama: body.aciklama, toplamOgrenmeS: Number(body.toplamOgrenmeS||0), temaId: body.temaId, dersId: body.dersId })
+      return reply.redirect('/admin')
     } catch (error) {
       return handleError(reply, error)
     }
@@ -648,4 +746,9 @@ export default async function routes(fastify: FastifyInstance) {
       version: '1.0.0'
     })
   })
+
+  // =================== PLAN OTOMASYONU ===================
+  
+  // Plan Otomasyonu Routes
+  fastify.register(planRoutes, { prefix: '/api/plan' })
 }

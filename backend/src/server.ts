@@ -23,6 +23,8 @@ fastify.register(cors, {
   credentials: true
 })
 
+// Note: urlencoded form parsing removed; admin page posts JSON via fetch()
+
 // Swagger documentation
 fastify.register(swagger, {
   swagger: {
