@@ -127,7 +127,8 @@ model Hafta {
   haftaNo     Int    // 1, 2, 3... (yıl içindeki hafta sırası)
   baslamaTarihi DateTime
   bitisTarihi DateTime
-  tip         HaftaTipi @default(DERS) // DERS, TATIL, SINAV
+  tip         HaftaTipi @default(DERS) // DERS, TATIL, SINAV, SIB_NAV
+  donem       DonemTipi // BIRINCI_DONEM, IKINCI_DONEM
   aciklama    String? // "1. Hafta", "Yarıyıl Tatili" vb.
   yilId       String
   createdAt   DateTime @default(now())
@@ -144,9 +145,15 @@ model Hafta {
 
 // Hafta tipleri
 enum HaftaTipi {
-  DERS    // Normal ders haftası
-  TATIL   // Tatil haftası
-  SINAV   // Sınav haftası
+  DERS     // Normal ders haftası
+  TATIL    // Tatil haftası
+  SINAV    // Sınav haftası
+}
+
+// Dönem tipleri
+enum DonemTipi {
+  BIRINCI_DONEM   // 1. Dönem
+  IKINCI_DONEM    // 2. Dönem
 }
 
 // Ana plan tablosu (yıllık, haftalık, günlük planlar için)
