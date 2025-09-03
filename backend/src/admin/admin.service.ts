@@ -29,14 +29,35 @@ export class AdminService {
   }
 
   async temaEkle(dersId: string, ad: string, sira: number) {
-    return this.prisma.tema.create({ data: { dersId, ad, sira } });
+    const ders = await this.prisma.ders.findUnique({ where: { id: dersId } });
+    if (!ders) throw new Error('Belirtilen ders bulunamadı');
+    try {
+      return await this.prisma.tema.create({ data: { dersId, ad, sira } });
+    } catch (e: any) {
+      if (e.code === 'P2002') throw new Error('Aynı derste bu sıra zaten kullanılmış');
+      throw e;
+    }
   }
 
   async beceriEkle(temaId: string, ad: string, sira: number, saatSuresi: number) {
-    return this.prisma.beceri.create({ data: { temaId, ad, sira, saatSuresi } });
+    const tema = await this.prisma.tema.findUnique({ where: { id: temaId } });
+    if (!tema) throw new Error('Belirtilen tema bulunamadı');
+    try {
+      return await this.prisma.beceri.create({ data: { temaId, ad, sira, saatSuresi } });
+    } catch (e: any) {
+      if (e.code === 'P2002') throw new Error('Bu temada aynı sıra zaten var');
+      throw e;
+    }
   }
 
   async kazanimEkle(temaId: string, ad: string, sira: number, saatSuresi: number) {
-    return this.prisma.kazanim.create({ data: { temaId, ad, sira, saatSuresi } });
+    const tema = await this.prisma.tema.findUnique({ where: { id: temaId } });
+    if (!tema) throw new Error('Belirtilen tema bulunamadı');
+    try {
+      return await this.prisma.kazanim.create({ data: { temaId, ad, sira, saatSuresi } });
+    } catch (e: any) {
+      if (e.code === 'P2002') throw new Error('Bu temada aynı sıra zaten var');
+      throw e;
+    }
   }
 }

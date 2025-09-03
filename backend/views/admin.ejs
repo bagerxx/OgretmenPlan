@@ -46,59 +46,54 @@
 
     <div class="panel">
       <h2>Ders Seç</h2>
-      <form method="GET" action="/admin">
-        <label for="dersId">Dersler</label>
-        <select id="dersId" name="dersId" onchange="this.form.submit()">
-          <option value="">-- Ders seçin --</option>
-          <% dersler.forEach(d=> { %>
-            <option value="<%= d.id %>" <%= seciliDers && seciliDers.id === d.id ? 'selected' : '' %>><%= d.sinif.seviye %>. Sınıf - <%= d.ad %></option>
-          <% }) %>
-        </select>
-        <p class="muted">Bir ders seçerek o derse bağlı temaları, becerileri ve kazanımları yönetebilirsiniz.</p>
+      <label for="dersId">Dersler</label>
+      <select id="dersId" name="dersId">
+        <option value="">-- Ders seçin --</option>
+        <% dersler.forEach(d=> { %>
+          <option value="<%= d.id %>" <%= seciliDers && seciliDers.id === d.id ? 'selected' : '' %>><%= d.sinif.seviye %>. Sınıf - <%= d.ad %></option>
+        <% }) %>
+      </select>
+      <p class="muted">Bir ders seçerek o derse bağlı temaları, becerileri ve kazanımları yönetebilirsiniz.</p>
+    </div>
+
+    <div class="panel">
+      <h2>Tema Ekle</h2>
+      <form id="temaForm" method="POST" action="/api/admin/tema">
+        <input id="temaDersId" type="hidden" name="dersId" value="<%= seciliDers?.id || '' %>" />
+        <label for="temaAd">Tema Adı</label>
+        <input id="temaAd" name="ad" type="text" required />
+        <label for="temaSira">Sıra</label>
+        <input id="temaSira" name="sira" type="number" min="1" required />
+        <button type="submit">Tema Oluştur</button>
       </form>
     </div>
 
-    <% if (seciliDers) { %>
-      <div class="panel">
-        <h2>Tema Ekle</h2>
-        <form method="POST" action="/admin/tema">
-          <input type="hidden" name="dersId" value="<%= seciliDers.id %>" />
-          <label for="temaAd">Tema Adı</label>
-          <input id="temaAd" name="ad" type="text" required />
-          <label for="temaSira">Sıra</label>
-          <input id="temaSira" name="sira" type="number" min="1" required />
-          <button type="submit">Tema Oluştur</button>
-        </form>
-      </div>
+    <div class="panel">
+      <h2>Beceri / Kazanım Ekle</h2>
+      <form id="icerikForm" method="POST" action="/api/admin/icerik">
+        <input id="icerikDersId" type="hidden" name="dersId" value="<%= seciliDers?.id || '' %>" />
+        <label for="icerikTip">Tip</label>
+        <select id="icerikTip" name="tip" required>
+          <option value="beceri">Beceri (Yeni Program)</option>
+          <option value="kazanim">Kazanım (Eski Program)</option>
+        </select>
+        <label for="icerikTema">Tema</label>
+        <select id="icerikTema" name="temaId" required>
+          <option value="">-- Tema seçin --</option>
+        </select>
+        <label for="icerikAd">Ad</label>
+        <input id="icerikAd" name="ad" type="text" required />
+        <label for="icerikSira">Sıra</label>
+          <input id="icerikSira" name="sira" type="number" min="1" required />
+        <label for="icerikSaat">Saat Süresi</label>
+        <input id="icerikSaat" name="saatSuresi" type="number" min="1" required />
+        <button type="submit">Ekle</button>
+      </form>
+    </div>
 
-      <div class="panel">
-        <h2>Beceri / Kazanım Ekle</h2>
-        <form method="POST" action="/admin/icerik">
-          <input type="hidden" name="dersId" value="<%= seciliDers.id %>" />
-          <label for="icerikTip">Tip</label>
-          <select id="icerikTip" name="tip" required>
-            <option value="beceri">Beceri (Yeni Program)</option>
-            <option value="kazanim">Kazanım (Eski Program)</option>
-          </select>
-          <label for="icerikTema">Tema</label>
-          <select id="icerikTema" name="temaId" required>
-            <option value="">-- Tema seçin --</option>
-            <% temalar.forEach(t => { %>
-              <option value="<%= t.id %>"><%= t.sira %>. <%= t.ad %></option>
-            <% }) %>
-          </select>
-          <label for="icerikAd">Ad</label>
-          <input id="icerikAd" name="ad" type="text" required />
-          <label for="icerikSira">Sıra</label>
-            <input id="icerikSira" name="sira" type="number" min="1" required />
-          <label for="icerikSaat">Saat Süresi</label>
-          <input id="icerikSaat" name="saatSuresi" type="number" min="1" required />
-          <button type="submit">Ekle</button>
-        </form>
-      </div>
-
-      <div class="panel">
-        <h2>Temalar ve İçerikler</h2>
+    <div class="panel">
+      <h2>Temalar ve İçerikler</h2>
+      <div id="temalarList">
         <% if (!temalar.length) { %>
           <p class="muted">Henüz tema yok.</p>
         <% } else { %>
@@ -124,7 +119,60 @@
           <% }) %>
         <% } %>
       </div>
-    <% } %>
+    </div>
+
+    <script>
+      const dersSelect = document.getElementById('dersId');
+      const temaSelect = document.getElementById('icerikTema');
+      const temaDersId = document.getElementById('temaDersId');
+      const icerikDersId = document.getElementById('icerikDersId');
+      const temalarList = document.getElementById('temalarList');
+
+      async function loadTemalar(dersId) {
+        if (!dersId) {
+          temaSelect.innerHTML = '<option value="">-- Tema seçin --</option>';
+          temalarList.innerHTML = '<p class="muted">Henüz tema yok.</p>';
+          temaDersId.value = '';
+          icerikDersId.value = '';
+          return;
+        }
+        const res = await fetch('/api/admin/temalar?dersId=' + dersId);
+        const json = await res.json();
+        const temalar = json.temalar || [];
+        temaSelect.innerHTML = '<option value="">-- Tema seçin --</option>' + temalar.map(t => `<option value="${t.id}">${t.sira}. ${t.ad}</option>`).join('');
+        temaDersId.value = dersId;
+        icerikDersId.value = dersId;
+        // render list
+        if (!temalar.length) {
+          temalarList.innerHTML = '<p class="muted">Henüz tema yok.</p>';
+        } else {
+          temalarList.innerHTML = temalar.map(t => `
+            <div style="margin-bottom:16px;">
+              <strong>${t.sira}. Tema: ${t.ad}</strong>
+              <div class="muted">Beceriler:</div>
+              <ul>${(t.beceriler.length ? t.beceriler.map(b => `<li><span class="badge">Beceri</span> ${b.sira}. ${b.ad} (${b.saatSuresi}s)</li>`).join('') : '<li class="muted">Yok</li>')}</ul>
+              <div class="muted">Kazanımlar:</div>
+              <ul>${(t.kazanimlar.length ? t.kazanimlar.map(k => `<li><span class="badge">Kazanım</span> ${k.sira}. ${k.ad} (${k.saatSuresi}s)</li>`).join('') : '<li class="muted">Yok</li>')}</ul>
+              <div class="divider"></div>
+            </div>
+          `).join('');
+        }
+      }
+
+      // init
+      (function(){
+        const initial = "<%= seciliDers ? seciliDers.id : '' %>";
+        if (initial) {
+          loadTemalar(initial);
+          dersSelect.value = initial;
+        }
+      })();
+
+      dersSelect.addEventListener('change', (e) => {
+        const id = e.target.value;
+        loadTemalar(id);
+      });
+    </script>
   </main>
 </body>
 </html>

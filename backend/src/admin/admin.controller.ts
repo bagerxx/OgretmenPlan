@@ -39,4 +39,11 @@ export class AdminController {
       return res.status(400).send(e.message);
     }
   }
+
+  @Get('temalar')
+  async temalarByDers(@Query('dersId') dersId: string) {
+    if (!dersId) return { temalar: [] };
+    const ders = await this.adminService.dersById(dersId);
+    return { temalar: ders?.temalar || [] };
+  }
 }
