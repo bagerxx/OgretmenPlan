@@ -128,8 +128,8 @@ model Hafta {
   baslamaTarihi DateTime
   bitisTarihi DateTime
   tip         HaftaTipi @default(DERS) // DERS, TATIL, SINAV, SIB_NAV
-  donem       DonemTipi // BIRINCI_DONEM, IKINCI_DONEM
-  aciklama    String? // "1. Hafta", "Yarıyıl Tatili" vb.
+  donem       DonemTipi? // BIRINCI_DONEM, IKINCI_DONEM (opsiyonel)
+  ad          String  @default("") // Örn: "8-12 eylül"
   yilId       String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

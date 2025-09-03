@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin - Ders / Tema / Beceri - Kazanım Yönetimi</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin:0; padding:0; background:#f1f5f9; color:#0f172a; }
+    header { background:#1e3a8a; color:#fff; padding:16px 24px; }
+    h1 { margin:0; font-size:20px; }
+    main { padding:24px; }
+    .panel { background:#fff; border-radius:8px; padding:20px; margin-bottom:24px; box-shadow:0 2px 4px rgba(0,0,0,0.06); }
+    .panel h2 { margin-top:0; font-size:18px; }
+    select, input[type=text], input[type=number] { padding:10px 12px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box; font-size:14px; }
+    label { display:block; font-size:13px; font-weight:600; margin-bottom:6px; }
+    form { display:grid; gap:12px; }
+    button { background:#2563eb; color:#fff; padding:10px 16px; border:none; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600; }
+    button.secondary { background:#0d9488; }
+    button.danger { background:#dc2626; }
+    table { border-collapse:collapse; width:100%; font-size:14px; }
+    th, td { padding:8px 10px; border-bottom:1px solid #e2e8f0; text-align:left; }
+    th { background:#1e40af; color:#fff; position:sticky; top:0; }
+    tbody tr:hover { background:#f1f5f9; }
+    .flex { display:flex; gap:12px; }
+    .col { flex:1; }
+    .muted { color:#64748b; font-size:12px; }
+    .badge { display:inline-block; background:#e2e8f0; padding:2px 6px; border-radius:4px; font-size:11px; margin-right:4px; }
+    .row-actions { display:flex; gap:6px; }
+    .divider { height:1px; background:#e2e8f0; margin:20px 0; }
+    .inline { display:inline-block; }
+    .error { background:#fee2e2; color:#991b1b; padding:8px 12px; border-radius:6px; margin-bottom:12px; }
+    .success { background:#dcfce7; color:#166534; padding:8px 12px; border-radius:6px; margin-bottom:12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Admin Paneli</h1>
+  </header>
+  <main>
+    <% if (flash && flash.error) { %>
+      <div class="error"><%= flash.error %></div>
+    <% } %>
+    <% if (flash && flash.success) { %>
+      <div class="success"><%= flash.success %></div>
+    <% } %>
+
+    <div class="panel">
+      <h2>Ders Seç</h2>
+      <form method="GET" action="/admin">
+        <label for="dersId">Dersler</label>
+        <select id="dersId" name="dersId" onchange="this.form.submit()">
+          <option value="">-- Ders seçin --</option>
+          <% dersler.forEach(d=> { %>
+            <option value="<%= d.id %>" <%= seciliDers && seciliDers.id === d.id ? 'selected' : '' %>><%= d.sinif.seviye %>. Sınıf - <%= d.ad %></option>
+          <% }) %>
+        </select>
+        <p class="muted">Bir ders seçerek o derse bağlı temaları, becerileri ve kazanımları yönetebilirsiniz.</p>
+      </form>
+    </div>
+
+    <% if (seciliDers) { %>
+      <div class="panel">
+        <h2>Tema Ekle</h2>
+        <form method="POST" action="/admin/tema">
+          <input type="hidden" name="dersId" value="<%= seciliDers.id %>" />
+          <label for="temaAd">Tema Adı</label>
+          <input id="temaAd" name="ad" type="text" required />
+          <label for="temaSira">Sıra</label>
+          <input id="temaSira" name="sira" type="number" min="1" required />
+          <button type="submit">Tema Oluştur</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h2>Beceri / Kazanım Ekle</h2>
+        <form method="POST" action="/admin/icerik">
+          <input type="hidden" name="dersId" value="<%= seciliDers.id %>" />
+          <label for="icerikTip">Tip</label>
+          <select id="icerikTip" name="tip" required>
+            <option value="beceri">Beceri (Yeni Program)</option>
+            <option value="kazanim">Kazanım (Eski Program)</option>
+          </select>
+          <label for="icerikTema">Tema</label>
+          <select id="icerikTema" name="temaId" required>
+            <option value="">-- Tema seçin --</option>
+            <% temalar.forEach(t => { %>
+              <option value="<%= t.id %>"><%= t.sira %>. <%= t.ad %></option>
+            <% }) %>
+          </select>
+          <label for="icerikAd">Ad</label>
+          <input id="icerikAd" name="ad" type="text" required />
+          <label for="icerikSira">Sıra</label>
+            <input id="icerikSira" name="sira" type="number" min="1" required />
+          <label for="icerikSaat">Saat Süresi</label>
+          <input id="icerikSaat" name="saatSuresi" type="number" min="1" required />
+          <button type="submit">Ekle</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h2>Temalar ve İçerikler</h2>
+        <% if (!temalar.length) { %>
+          <p class="muted">Henüz tema yok.</p>
+        <% } else { %>
+          <% temalar.forEach(t => { %>
+            <div style="margin-bottom:16px;">
+              <strong><%= t.sira %>. Tema: <%= t.ad %></strong>
+              <div class="muted">Beceriler:</div>
+              <ul>
+                <% if (t.beceriler.length === 0) { %><li class="muted">Yok</li><% } %>
+                <% t.beceriler.forEach(b => { %>
+                  <li><span class="badge">Beceri</span> <%= b.sira %>. <%= b.ad %> (<%= b.saatSuresi %>s)</li>
+                <% }) %>
+              </ul>
+              <div class="muted">Kazanımlar:</div>
+              <ul>
+                <% if (t.kazanimlar.length === 0) { %><li class="muted">Yok</li><% } %>
+                <% t.kazanimlar.forEach(k => { %>
+                  <li><span class="badge">Kazanım</span> <%= k.sira %>. <%= k.ad %> (<%= k.saatSuresi %>s)</li>
+                <% }) %>
+              </ul>
+              <div class="divider"></div>
+            </div>
+          <% }) %>
+        <% } %>
+      </div>
+    <% } %>
+  </main>
+</body>
+</html>

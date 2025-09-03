@@ -11,34 +11,45 @@ import {
   Platform
 } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
-import { createYil, generateHaftalar } from '../api/api'
+import { generateHaftalar } from '../api/api'
+import { useNavigation } from '@react-navigation/native'
+import { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import { RootStackParamList } from '../navigation/AppNavigator'
 
 // Base URL artık tek api dosyasında yönetiliyor; burada gereksiz.
+
+interface HaftaOlusturmaForm {
+  yilAciklama: string
+  baslangicTarihi: Date | undefined
+  bitisTarihi: Date | undefined
+  birinciaraTatil: TatilDonemi
+  ikinciAraTatil: TatilDonemi
+  somestrTatil: TatilDonemi
+}
 
 interface TatilDonemi {
   baslangic: Date | undefined
   bitis: Date | undefined
 }
 
-interface HaftaOlusturmaForm {
-  yilAciklama: string
-  baslangicTarihi: Date | undefined
-  bitisTarihi: Date | undefined
-  donemAyirici: Date | undefined
-  birinciaraTatil: TatilDonemi
-  ikinciAraTatil: TatilDonemi
-  somestrTatil: TatilDonemi
-}
-
 export default function HaftaOlusturmaScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>()
   const [form, setForm] = useState<HaftaOlusturmaForm>({
-    yilAciklama: '',
-    baslangicTarihi: undefined,
-    bitisTarihi: undefined,
-    donemAyirici: undefined,
-    birinciaraTatil: { baslangic: undefined, bitis: undefined },
-    ikinciAraTatil: { baslangic: undefined, bitis: undefined },
-    somestrTatil: { baslangic: undefined, bitis: undefined }
+    yilAciklama: '2025-2026 Eğitim Öğretim Yılı',
+  baslangicTarihi: new Date(2025, 8, 8), // 8 Eylül 2025 (ay index 0'dan başlar)
+  bitisTarihi: new Date(2026, 5, 26), // 26 Haziran 2026
+    birinciaraTatil: { 
+      baslangic: new Date(2025, 10, 10), // 10 Kasım 2025
+      bitis: new Date(2025, 10, 14) // 14 Kasım 2025
+    },
+    ikinciAraTatil: { 
+      baslangic: new Date(2026, 2, 16), // 20 Mart 2026
+      bitis: new Date(2026, 2, 20) // 26 Mart 2026
+    },
+    somestrTatil: { 
+      baslangic: new Date(2026, 0, 19), // 19 Ocak 2026
+      bitis: new Date(2026, 0, 30) // 30 Ocak 2026
+    }
   })
 
   const [showDatePicker, setShowDatePicker] = useState<{
@@ -120,41 +131,27 @@ export default function HaftaOlusturmaScreen() {
     setResult(null)
 
     try {
-      // Önce yıl oluştur (API wrapper)
-      const yilData = await createYil({
+      // Tek çağrıda hem yıl hem hafta oluştur
+      const result = await generateHaftalar({
         yil: form.baslangicTarihi!.getFullYear(),
         aciklama: form.yilAciklama,
-        baslamaTarihi: form.baslangicTarihi!.toISOString(),
-        bitisTarihi: form.bitisTarihi!.toISOString()
-      })
-
-      // Hafta payload
-      const haftaData: any = {
-        yilId: yilData.id,
         baslangicTarihi: form.baslangicTarihi!.toISOString(),
-        bitisTarihi: form.bitisTarihi!.toISOString()
-      }
-      if (form.donemAyirici) haftaData.donemAyirici = form.donemAyirici.toISOString()
-      if (form.birinciaraTatil.baslangic && form.birinciaraTatil.bitis) {
-        haftaData.birinciaraTatil = {
+        bitisTarihi: form.bitisTarihi!.toISOString(),
+      // donemAyirici kaldırıldı; dönem ayrımı sömestr tatiline göre yapılıyor
+        birinciaraTatil: form.birinciaraTatil.baslangic && form.birinciaraTatil.bitis ? {
           baslangic: form.birinciaraTatil.baslangic.toISOString(),
           bitis: form.birinciaraTatil.bitis.toISOString()
-        }
-      }
-      if (form.ikinciAraTatil.baslangic && form.ikinciAraTatil.bitis) {
-        haftaData.ikinciAraTatil = {
+        } : undefined,
+        ikinciAraTatil: form.ikinciAraTatil.baslangic && form.ikinciAraTatil.bitis ? {
           baslangic: form.ikinciAraTatil.baslangic.toISOString(),
           bitis: form.ikinciAraTatil.bitis.toISOString()
-        }
-      }
-      if (form.somestrTatil.baslangic && form.somestrTatil.bitis) {
-        haftaData.somestrTatil = {
+        } : undefined,
+        somestrTatil: form.somestrTatil.baslangic && form.somestrTatil.bitis ? {
           baslangic: form.somestrTatil.baslangic.toISOString(),
           bitis: form.somestrTatil.bitis.toISOString()
-        }
-      }
+        } : undefined
+      })
 
-      const result = await generateHaftalar(haftaData)
       setResult(result)
       Alert.alert('Başarılı', `${result.oluşturulanHaftaSayisi} hafta başarıyla oluşturuldu!`)
     } catch (error) {
@@ -167,13 +164,22 @@ export default function HaftaOlusturmaScreen() {
 
   const resetForm = () => {
     setForm({
-      yilAciklama: '',
-      baslangicTarihi: undefined,
-      bitisTarihi: undefined,
-      donemAyirici: undefined,
-      birinciaraTatil: { baslangic: undefined, bitis: undefined },
-      ikinciAraTatil: { baslangic: undefined, bitis: undefined },
-      somestrTatil: { baslangic: undefined, bitis: undefined }
+      yilAciklama: '2025-2026 Eğitim Öğretim Yılı',
+      baslangicTarihi: new Date(2025, 8, 8), // 8 Eylül 2025
+      bitisTarihi: new Date(2026, 5, 26), // 26 Haziran 2026
+    // donemAyirici kaldırıldı
+      birinciaraTatil: { 
+        baslangic: new Date(2025, 10, 10), // 10 Kasım 2025
+        bitis: new Date(2025, 10, 14) // 14 Kasım 2025
+      },
+      ikinciAraTatil: { 
+        baslangic: new Date(2026, 2, 20), // 20 Mart 2026
+        bitis: new Date(2026, 2, 26) // 26 Mart 2026
+      },
+      somestrTatil: { 
+        baslangic: new Date(2026, 0, 19), // 19 Ocak 2026
+        bitis: new Date(2026, 0, 30) // 30 Ocak 2026
+      }
     })
     setResult(null)
   }
@@ -221,17 +227,7 @@ export default function HaftaOlusturmaScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Dönem Ayırıcı Tarih (Opsiyonel)</Text>
-            <TouchableOpacity
-              style={styles.dateButton}
-              onPress={() => showDatePickerFor('donemAyirici')}
-            >
-              <Text style={styles.dateButtonText}>
-                {formatDate(form.donemAyirici)}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          {/* Dönem ayırıcı kaldırıldı — dönem ayrımı sömestr tatiline göre yapılır */}
         </View>
 
         {/* Tatil Dönemleri */}
@@ -330,6 +326,14 @@ export default function HaftaOlusturmaScreen() {
             )}
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={[styles.navListButton]}
+          onPress={() => navigation.navigate('HaftaListe', { yil: form.baslangicTarihi?.getFullYear() || new Date().getFullYear() })}
+          disabled={loading}
+        >
+          <Text style={styles.navListButtonText}>Hafta Listesini Gör</Text>
+        </TouchableOpacity>
 
         {/* Sonuç */}
         {result && (
@@ -496,4 +500,16 @@ const styles = StyleSheet.create({
     color: '#15803d',
     marginLeft: 10,
   },
+  navListButton:{
+    marginTop:16,
+    backgroundColor:'#0d9488',
+    padding:14,
+    borderRadius:8,
+    alignItems:'center'
+  },
+  navListButtonText:{
+    color:'#fff',
+    fontSize:16,
+    fontWeight:'600'
+  }
 })

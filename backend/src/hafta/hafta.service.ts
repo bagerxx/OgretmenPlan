@@ -3,13 +3,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { HaftaTipi, DonemTipi } from '@prisma/client'
 import { z } from 'zod'
 
-// Validation schemas
+// Sadeleştirilmiş şema - yıl bilgileri de dahil
 export const CreateHaftalarSchema = z.object({
-  yilId: z.string().min(1, 'Yıl ID gereklidir'),
+  // Yıl bilgileri
+  yil: z.number().int().min(2020).max(2030),
+  aciklama: z.string().min(1, 'Açıklama gereklidir'),
+  // Tarih aralıkları
   baslangicTarihi: z.string().pipe(z.coerce.date()),
   bitisTarihi: z.string().pipe(z.coerce.date()),
-  donemAyirici: z.string().pipe(z.coerce.date()).optional(), // Dönem ayırıcı tarih (default: 31 Ocak)
-  // Tatil dönemleri (tarih aralıkları)
+  // Tatil dönemleri
   birinciaraTatil: z.object({
     baslangic: z.string().pipe(z.coerce.date()),
     bitis: z.string().pipe(z.coerce.date())
@@ -24,22 +26,15 @@ export const CreateHaftalarSchema = z.object({
   }).optional()
 })
 
-export const UpdateHaftaSchema = z.object({
-  tip: z.enum(['DERS', 'TATIL', 'SINAV']).optional(),
-  donem: z.enum(['BIRINCI_DONEM', 'IKINCI_DONEM']).optional(),
-  aciklama: z.string().optional()
-})
-
 export type CreateHaftalarInput = z.infer<typeof CreateHaftalarSchema>
-export type UpdateHaftaInput = z.infer<typeof UpdateHaftaSchema>
 
 export interface HaftaData {
   haftaNo: number
   baslamaTarihi: Date
   bitisTarihi: Date
   tip: HaftaTipi
-  donem: DonemTipi
-  aciklama?: string
+  donem?: DonemTipi
+  ad: string
   yilId: string
 }
 
@@ -48,172 +43,137 @@ export class HaftaService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * Yıla göre tüm haftaları listele
-   */
-  async getHaftalarByYil(yilId: string, filters?: {
-    tip?: HaftaTipi
-    donem?: DonemTipi
-  }) {
-    const where: any = { yilId }
-
-    if (filters?.tip) {
-      where.tip = filters.tip
-    }
-
-    if (filters?.donem) {
-      where.donem = filters.donem
-    }
-
-    return await this.prisma.hafta.findMany({
-      where,
-      orderBy: { haftaNo: 'asc' },
-      include: {
-        yil: true
-      }
-    })
-  }
-
-  /**
-   * ID ile hafta getir
-   */
-  async getHaftaById(id: string) {
-    const hafta = await this.prisma.hafta.findUnique({
-      where: { id },
-      include: {
-        yil: true
-      }
-    })
-
-    if (!hafta) {
-      throw new Error('Hafta bulunamadı')
-    }
-
-    return hafta
-  }
-
-  /**
-   * Hafta güncelle
-   */
-  async updateHafta(id: string, data: UpdateHaftaInput) {
-    const existing = await this.prisma.hafta.findUnique({
-      where: { id }
-    })
-
-    if (!existing) {
-      throw new Error('Hafta bulunamadı')
-    }
-
-    return await this.prisma.hafta.update({
-      where: { id },
-      data
-    })
-  }
-
-  /**
-   * Hafta sil
-   */
-  async deleteHafta(id: string) {
-    const existing = await this.prisma.hafta.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          select: {
-            planDetaylari: true,
-            planSablonlari: true
-          }
-        }
-      }
-    })
-
-    if (!existing) {
-      throw new Error('Hafta bulunamadı')
-    }
-
-    // Bağlı planlar var mı kontrol et
-    if (existing._count.planDetaylari > 0 || existing._count.planSablonlari > 0) {
-      throw new Error('Bu haftaya bağlı planlar var. Önce planları silin.')
-    }
-
-    await this.prisma.hafta.delete({
-      where: { id }
-    })
-
-    return { message: 'Hafta başarıyla silindi' }
-  }
-
-  /**
-   * Verilen tarih aralığındaki haftaları otomatik oluştur
-   * Sadece hafta içi günleri dikkate alır (Pazartesi-Cuma)
-   * Tatil haftaları parametrelere göre işaretlenir
+   * Yıl oluştur ve haftalarını otomatik üret
+   * Tek endpoint - hem yıl hem hafta oluşturur
    */
   async generateHaftalar(data: CreateHaftalarInput) {
     const { 
-      yilId, 
-      baslangicTarihi, 
-      bitisTarihi, 
-      donemAyirici,
+      yil,
+      aciklama,
+  baslangicTarihi, 
+  bitisTarihi, 
       birinciaraTatil,
       ikinciAraTatil,
       somestrTatil
     } = data
 
-    // Başlangıç tarihinin Pazartesi olmasını sağla
-    const baslangic = this.getNextMonday(baslangicTarihi)
-    
-    // Bitiş tarihinin Cuma olmasını sağla
-    const bitis = this.getPreviousFriday(bitisTarihi)
-    
-    // Dönem ayırıcı (varsayılan: 31 Ocak)
-    const donemAyiriciTarih = donemAyirici || new Date(baslangic.getFullYear() + 1, 0, 31) // 31 Ocak
+    // Gelen payload tarihlerini Date objesine çevir (controller genellikle string gönderir)
+    const toDate = (v: any) => (v instanceof Date ? v : new Date(v))
 
-    // Mevcut haftaları sil
-    await this.prisma.hafta.deleteMany({
-      where: { yilId }
+  const baslangicDate = toDate(baslangicTarihi)
+  const bitisDate = toDate(bitisTarihi)
+    
+    const birinciaraTatilDate = birinciaraTatil
+      ? { baslangic: toDate(birinciaraTatil.baslangic), bitis: toDate(birinciaraTatil.bitis) }
+      : undefined
+    const ikinciAraTatilDate = ikinciAraTatil
+      ? { baslangic: toDate(ikinciAraTatil.baslangic), bitis: toDate(ikinciAraTatil.bitis) }
+      : undefined
+    const somestrTatilDate = somestrTatil
+      ? { baslangic: toDate(somestrTatil.baslangic), bitis: toDate(somestrTatil.bitis) }
+      : undefined
+
+    console.log('[HaftaService] Başlangıç parametreleri:', {
+      baslangicTarihi: baslangicDate.toLocaleDateString('tr-TR'),
+      bitisTarihi: bitisDate.toLocaleDateString('tr-TR'),
+      birinciaraTatil: birinciaraTatilDate,
+      ikinciAraTatil: ikinciAraTatilDate,
+      somestrTatil: somestrTatilDate
+    })
+
+    // Yıl zaten varsa güncelle veya yeni oluştur (unique constraint önleme)
+  // UTC gün başına normalize et (00:00:00Z) – frontend toISOString offset kaymasını önler
+  const toUtcDateOnly = (d: Date) => new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+  const yilData = await this.prisma.yil.upsert({
+      where: { yil },
+      update: {
+    aciklama,
+    baslamaTarihi: toUtcDateOnly(baslangicDate),
+    bitisTarihi: toUtcDateOnly(bitisDate)
+      },
+      create: {
+        yil,
+        aciklama,
+    baslamaTarihi: toUtcDateOnly(baslangicDate),
+    bitisTarihi: toUtcDateOnly(bitisDate)
+      }
+    })
+
+    // Eğer yıl zaten varsa eski haftaları temizle (ör: yeniden oluşturma durumunda)
+    await this.prisma.hafta.deleteMany({ where: { yilId: yilData.id } })
+
+    // Başlangıç tarihi Pazartesi'ye ayarla, bitiş tarihi Cuma'ya ayarla
+    const baslangic = this.getNextMonday(baslangicDate)
+    const bitis = this.getPreviousFriday(bitisDate)
+
+    console.log('[HaftaService] Hesaplanan hafta aralığı:', {
+      baslangic: baslangic.toLocaleDateString('tr-TR'),
+      bitis: bitis.toLocaleDateString('tr-TR')
     })
 
     const haftalar: HaftaData[] = []
     let currentDate = new Date(baslangic)
     let haftaNo = 1
 
+    // Başlangıçtan bitişe kadar tüm haftaları oluştur
     while (currentDate <= bitis) {
-      const haftaBaslangic = new Date(currentDate)
-      const haftaBitis = this.getFridayOfWeek(currentDate) // Haftanın Cuma günü
+      const haftaBaslangic = new Date(currentDate) // Pazartesi
+      const haftaBitis = this.getFridayOfWeek(currentDate) // Cuma
       
-      // Eğer hafta sonu geçmiş ise döngüyü kır
-      if (haftaBitis > bitis) {
-        break
-      }
+      // Eğer hafta sonu bitiş tarihini aşıyorsa dur
+      if (haftaBitis > bitis) break
 
-      // Hafta tipini belirle (tarih aralığına göre)
-      const haftaTipi = this.getHaftaTipiByDate(haftaBaslangic, haftaBitis, {
-        birinciaraTatil,
-        ikinciAraTatil,
-        somestrTatil
+      // 1. Hafta tipini belirle (DERS veya TATIL)
+      const haftaTipi = this.belirleHaftaTipi(haftaBaslangic, haftaBitis, {
+        birinciaraTatil: birinciaraTatilDate,
+        ikinciAraTatil: ikinciAraTatilDate,
+        somestrTatil: somestrTatilDate
       })
 
-      // Hafta verisi oluştur
-      haftalar.push(this.createHaftaDataWithTip(
-        haftaNo, 
-        haftaBaslangic, 
-        haftaBitis, 
-        yilId, 
-        donemAyiriciTarih,
-        haftaTipi,
-        somestrTatil || undefined
-      ))
+      // 2. Dönem tipini belirle (sömestr tatili baz alınarak)
+  const donemTipi = this.belirleDonemTipi(haftaBaslangic, somestrTatilDate)
 
-      // Bir sonraki haftaya geç (7 gün sonra)
+      // Hafta verisini oluştur
+      haftalar.push({
+        haftaNo,
+        baslamaTarihi: toUtcDateOnly(haftaBaslangic),
+        bitisTarihi: toUtcDateOnly(haftaBitis),
+        tip: haftaTipi,
+        donem: donemTipi,
+        ad: this.createHaftaAd(haftaBaslangic, haftaBitis),
+        yilId: yilData.id
+      })
+
+      console.log(`[HaftaService] ${haftaNo}. hafta: ${haftaBaslangic.toLocaleDateString('tr-TR')} - ${haftaBitis.toLocaleDateString('tr-TR')} | Tip: ${haftaTipi} | Dönem: ${donemTipi}`)
+
+      // Bir sonraki haftaya geç (7 gün)
       currentDate.setDate(currentDate.getDate() + 7)
       haftaNo++
     }
 
-    // Toplu olarak oluştur
+    // Haftaları toplu oluştur (donem optional olabilir -> null gönder)
     await this.prisma.hafta.createMany({
-      data: haftalar
+      // cast to any because Prisma client types may need regeneration after schema change
+      data: haftalar.map(h => ({
+        haftaNo: h.haftaNo,
+        baslamaTarihi: h.baslamaTarihi,
+        bitisTarihi: h.bitisTarihi,
+        tip: h.tip,
+        donem: (h.donem ?? null) as any,
+  ad: h.ad,
+        yilId: h.yilId
+      })) as any
     })
 
-    // Gün hesaplama
     const gunSayilari = this.calculateWorkingDays(haftalar)
+
+    console.log('[HaftaService] Sonuç özeti:', {
+      toplamHafta: haftalar.length,
+      dersHaftasi: haftalar.filter(h => h.tip === 'DERS').length,
+      tatilHaftasi: haftalar.filter(h => h.tip === 'TATIL').length,
+      birinciDonem: haftalar.filter(h => h.donem === 'BIRINCI_DONEM').length,
+      ikinciDonem: haftalar.filter(h => h.donem === 'IKINCI_DONEM').length
+    })
 
     return {
       message: `${haftalar.length} hafta başarıyla oluşturuldu`,
@@ -223,43 +183,10 @@ export class HaftaService {
       sinavHaftaSayisi: haftalar.filter(h => h.tip === 'SINAV').length,
       birinciDonemHaftaSayisi: haftalar.filter(h => h.donem === 'BIRINCI_DONEM').length,
       ikinciDonemHaftaSayisi: haftalar.filter(h => h.donem === 'IKINCI_DONEM').length,
-      gunSayilari
+      gunSayilari,
+      yilId: yilData.id
     }
-  }
-
-  /**
-   * Eğitim yılı istatistikleri
-   */
-  async getEgitiYiliStats(yilId: string) {
-    const haftalar = await this.prisma.hafta.findMany({
-      where: { yilId }
-    })
-
-    const gunSayilari = this.calculateWorkingDays(haftalar)
-
-    const stats = {
-      toplam: haftalar.length,
-      ders: haftalar.filter(h => h.tip === 'DERS').length,
-      tatil: haftalar.filter(h => h.tip === 'TATIL').length,
-      sinav: haftalar.filter(h => h.tip === 'SINAV').length,
-      birinciDonem: haftalar.filter(h => h.donem === 'BIRINCI_DONEM').length,
-      ikinciDonem: haftalar.filter(h => h.donem === 'IKINCI_DONEM').length,
-      gunSayilari
-    }
-
-    const ilkHafta = haftalar.sort((a, b) => a.haftaNo - b.haftaNo)[0]
-    const sonHafta = haftalar.sort((a, b) => b.haftaNo - a.haftaNo)[0]
-
-    return {
-      stats,
-      donem: ilkHafta && sonHafta ? {
-        baslangic: this.formatTurkish(ilkHafta.baslamaTarihi),
-        bitis: this.formatTurkish(sonHafta.bitisTarihi)
-      } : null
-    }
-  }
-
-  /**
+  }  /**
    * Haftalardaki çalışma günlerini hesaplar
    */
   private calculateWorkingDays(haftalar: any[]) {
@@ -304,6 +231,18 @@ export class HaftaService {
     }
   }
 
+  /** Belirli bir yılın haftalarını listele (haftaNo, ad, tip, donem) */
+  async getHaftalarByYil(yil: number) {
+    const yilKaydi = await this.prisma.yil.findUnique({ where: { yil } })
+    if (!yilKaydi) return { yil, haftalar: [] }
+    const haftalar = await this.prisma.hafta.findMany({
+      where: { yilId: yilKaydi.id },
+      orderBy: { haftaNo: 'asc' },
+      select: { haftaNo: true, ad: true, tip: true, donem: true }
+    })
+    return { yil, haftalar }
+  }
+
   /**
    * Verilen tarih aralığındaki çalışma günlerini sayar (Pazartesi-Cuma)
    */
@@ -322,6 +261,79 @@ export class HaftaService {
   }
 
   // Yardımcı fonksiyonlar
+
+  /**
+   * Hafta tipini belirler (DERS veya TATIL)
+   */
+  private belirleHaftaTipi(haftaBaslangic: Date, haftaBitis: Date, tatilParams: {
+    birinciaraTatil?: { baslangic: Date, bitis: Date },
+    ikinciAraTatil?: { baslangic: Date, bitis: Date },
+    somestrTatil?: { baslangic: Date, bitis: Date }
+  }): HaftaTipi {
+    const { birinciaraTatil, ikinciAraTatil, somestrTatil } = tatilParams
+
+    // Birinci ara tatil kontrolü
+    if (birinciaraTatil && this.haftaTatilIleKesisiyorMu(haftaBaslangic, haftaBitis, birinciaraTatil.baslangic, birinciaraTatil.bitis)) {
+      return 'TATIL'
+    }
+
+    // İkinci ara tatil kontrolü
+    if (ikinciAraTatil && this.haftaTatilIleKesisiyorMu(haftaBaslangic, haftaBitis, ikinciAraTatil.baslangic, ikinciAraTatil.bitis)) {
+      return 'TATIL'
+    }
+
+    // Sömestr tatili kontrolü
+    if (somestrTatil && this.haftaTatilIleKesisiyorMu(haftaBaslangic, haftaBitis, somestrTatil.baslangic, somestrTatil.bitis)) {
+      return 'TATIL'
+    }
+
+    // Diğer durumlarda DERS
+    return 'DERS'
+  }
+
+  /**
+   * Dönem tipini belirler (sömestr tatili baz alınarak)
+   */
+  private belirleDonemTipi(haftaBaslangic: Date, somestrTatil?: { baslangic: Date, bitis: Date }): DonemTipi {
+    if (!somestrTatil) {
+      // Sömestr tatili belirtilmemişse default olarak birinci dönem
+      return 'BIRINCI_DONEM'
+    }
+
+    // Hafta sömestr tatili başlangıcından önce mi?
+    if (haftaBaslangic < somestrTatil.baslangic) {
+      return 'BIRINCI_DONEM'
+    } else {
+      return 'IKINCI_DONEM'
+    }
+  }
+
+  /**
+   * Hafta ile tatil aralığının kesişip kesişmediğini kontrol eder
+   */
+  private haftaTatilIleKesisiyorMu(haftaBaslangic: Date, haftaBitis: Date, tatilBaslangic: Date, tatilBitis: Date): boolean {
+    // Sadece tarih kısmını karşılaştır (saat bilgisini yok say)
+    const normalizeDate = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    
+    const hb = normalizeDate(haftaBaslangic)
+    const he = normalizeDate(haftaBitis)
+    const tb = normalizeDate(tatilBaslangic)
+    const te = normalizeDate(tatilBitis)
+
+    // Hafta aralığı ile tatil aralığı kesişiyor mu?
+    return hb <= te && he >= tb
+  }
+
+  /** Hafta adını oluşturur: 8-12 Eylül (tip bağımsız) */
+  private createHaftaAd(baslangic: Date, bitis: Date): string {
+    const gun = (d: Date) => d.getDate()
+    const ayAd = (d: Date) => this.getMonthName(d.getMonth())
+    // Ay aynıysa 8-12 Eylül, değilse 29 Eylül - 3 Ekim gibi
+    if (baslangic.getMonth() === bitis.getMonth()) {
+      return `${gun(baslangic)}-${gun(bitis)} ${ayAd(baslangic)}`
+    }
+    return `${gun(baslangic)} ${ayAd(baslangic)} - ${gun(bitis)} ${ayAd(bitis)}`
+  }
 
   /**
    * Verilen tarihin en yakın Pazartesi gününü bulur
@@ -363,135 +375,6 @@ export class HaftaService {
   }
 
   /**
-   * Hafta tipini tarih aralığına göre belirler
-   */
-  private getHaftaTipiByDate(haftaBaslangic: Date, haftaBitis: Date, tatilParams: {
-    birinciaraTatil?: { baslangic: Date, bitis: Date },
-    ikinciAraTatil?: { baslangic: Date, bitis: Date },
-    somestrTatil?: { baslangic: Date, bitis: Date }
-  }): HaftaTipi {
-    const { birinciaraTatil, ikinciAraTatil, somestrTatil } = tatilParams
-
-    // Birinci ara tatil kontrol
-    if (birinciaraTatil && this.isWeekInRange(haftaBaslangic, haftaBitis, birinciaraTatil.baslangic, birinciaraTatil.bitis)) {
-      return 'TATIL'
-    }
-
-    // İkinci ara tatil kontrol
-    if (ikinciAraTatil && this.isWeekInRange(haftaBaslangic, haftaBitis, ikinciAraTatil.baslangic, ikinciAraTatil.bitis)) {
-      return 'TATIL'
-    }
-
-    // Sömestr tatili kontrol
-    if (somestrTatil && this.isWeekInRange(haftaBaslangic, haftaBitis, somestrTatil.baslangic, somestrTatil.bitis)) {
-      return 'TATIL'
-    }
-
-    return 'DERS'
-  }
-
-  /**
-   * Haftanın belirtilen tarih aralığında olup olmadığını kontrol eder
-   */
-  private isWeekInRange(haftaBaslangic: Date, haftaBitis: Date, tatilBaslangic: Date, tatilBitis: Date): boolean {
-    // Hafta, tatil aralığıyla kesişiyor mu?
-    return (haftaBaslangic <= tatilBitis && haftaBitis >= tatilBaslangic)
-  }
-
-  /**
-   * Hafta tipini belirler (hafta numarasına göre - eski metod)
-   */
-  private getHaftaTipi(haftaNo: number, tatilParams: {
-    birinciaraTatilHaftasi?: number,
-    ikinciAraTatilHaftasi?: number,
-    somestrTatilBaslangicHaftasi?: number
-  }): HaftaTipi {
-    const { birinciaraTatilHaftasi, ikinciAraTatilHaftasi, somestrTatilBaslangicHaftasi } = tatilParams
-
-    // Birinci ara tatil kontrol
-    if (birinciaraTatilHaftasi && haftaNo === birinciaraTatilHaftasi) {
-      return 'TATIL'
-    }
-
-    // İkinci ara tatil kontrol
-    if (ikinciAraTatilHaftasi && haftaNo === ikinciAraTatilHaftasi) {
-      return 'TATIL'
-    }
-
-    // Sömestr tatili kontrol (2 hafta)
-    if (somestrTatilBaslangicHaftasi && 
-        (haftaNo === somestrTatilBaslangicHaftasi || haftaNo === somestrTatilBaslangicHaftasi + 1)) {
-      return 'TATIL'
-    }
-
-    return 'DERS'
-  }
-
-  /**
-   * Hafta verisi oluşturur - Tip parametresi ile
-   */
-  private createHaftaDataWithTip(
-    haftaNo: number,
-    baslangic: Date,
-    bitis: Date,
-    yilId: string,
-    donemAyirici: Date,
-    tip: HaftaTipi,
-    somestrTatil?: { baslangic: Date, bitis: Date }
-  ): HaftaData {
-    // Yeni kural: Eğer sömestr tatili verildiyse dönem ayırıcı olarak tatilin başlangıcı kullanılır.
-    let donem: DonemTipi
-    if (somestrTatil) {
-      // 1. dönem haftaları sömestr tatili başlangıcından önce başlayan haftalar
-      donem = baslangic < somestrTatil.baslangic ? 'BIRINCI_DONEM' : 'IKINCI_DONEM'
-    } else {
-      // Geriye dönük uyumluluk: donemAyirici üzerinden hesapla
-      donem = baslangic <= donemAyirici ? 'BIRINCI_DONEM' : 'IKINCI_DONEM'
-    }
-    
-    // Açıklama tipine göre belirlenir
-    let aciklama = `${haftaNo}. Hafta (${this.formatDateRange(baslangic, bitis)})`
-    
-    if (tip === 'TATIL') {
-      aciklama += ' - Tatil Haftası'
-    }
-
-    return {
-      haftaNo,
-      baslamaTarihi: baslangic,
-      bitisTarihi: bitis,
-      tip,
-      donem,
-      aciklama,
-      yilId
-    }
-  }
-
-  /**
-   * Hafta verisi oluşturur - Tüm haftalar DERS haftası olarak oluşturulur
-   */
-  private createHaftaData(
-    haftaNo: number,
-    baslangic: Date,
-    bitis: Date,
-    yilId: string,
-    donemAyirici: Date,
-    somestrTatil?: { baslangic: Date, bitis: Date }
-  ): HaftaData {
-    // Dönem belirleme (aynı mantık)
-    let donem: DonemTipi
-    if (somestrTatil) {
-      donem = baslangic < somestrTatil.baslangic ? 'BIRINCI_DONEM' : 'IKINCI_DONEM'
-    } else {
-      donem = baslangic <= donemAyirici ? 'BIRINCI_DONEM' : 'IKINCI_DONEM'
-    }
-
-    const tip: HaftaTipi = 'DERS'
-    const aciklama = `${haftaNo}. Hafta (${this.formatDateRange(baslangic, bitis)})`
-    return { haftaNo, baslamaTarihi: baslangic, bitisTarihi: bitis, tip, donem, aciklama, yilId }
-  }
-
-  /**
    * Tarih aralığını formatlar
    */
   private formatDateRange(start: Date, end: Date): string {
@@ -501,13 +384,6 @@ export class HaftaService {
   }
 
   /**
-   * Tarihi Türkçe formatlar
-   */
-  private formatTurkish(date: Date): string {
-    return `${date.getDate()} ${this.getMonthName(date.getMonth())} ${date.getFullYear()}`
-  }
-
-    /**
    * Ay adını döndürür
    */
   private getMonthName(month: number): string {
@@ -518,4 +394,3 @@ export class HaftaService {
     return months[month]
   }
 }
-

@@ -3,8 +3,10 @@ import Constants from 'expo-constants';
 
 // Tek nokta: app.json (expoConfig.extra.backendUrl) > localhost fallback
 function baseURL(): string {
-  const ApiUrl = Constants.expoConfig?.extra;
-  return ApiUrl?.backendUrl;
+  const apiUrl = Constants.expoConfig?.extra?.backendUrl;
+  console.log('[DEBUG] Constants.expoConfig:', Constants.expoConfig);
+  console.log('[DEBUG] apiUrl:', apiUrl);
+  return apiUrl
 }
 console.log('[API] baseURL=', baseURL());
 export const api = axios.create({
@@ -21,12 +23,25 @@ api.interceptors.response.use(r => r, (error) => {
 });
 
 // Kullanılan minimal endpoint fonksiyonları
-export async function createYil(payload: { yil: number; aciklama: string; baslamaTarihi: string; bitisTarihi: string; }) {
-  const { data } = await api.post('/api/yil', payload); return data;
+
+// Tek endpoint - yıl oluştur ve haftaları üret
+export async function generateHaftalar(payload: { 
+  yil: number; 
+  aciklama: string; 
+  baslangicTarihi: string; 
+  bitisTarihi: string; 
+  birinciaraTatil?: any; 
+  ikinciAraTatil?: any; 
+  somestrTatil?: any; 
+}) {
+  // NestJS backend uses a global prefix '/api' (see backend/src/main.ts)
+  const { data } = await api.post('/api/hafta/generate', payload)
+  return data
 }
 
-export async function generateHaftalar(payload: { yilId: string; baslangicTarihi: string; bitisTarihi: string; donemAyirici?: string; birinciaraTatil?: any; ikinciAraTatil?: any; somestrTatil?: any; }) {
-  const { data } = await api.post('/api/hafta/generate', payload); return data;
+export async function getHaftalarByYil(yil: number) {
+  const { data } = await api.get(`/api/hafta/${yil}`)
+  return data as { yil: number; haftalar: { haftaNo: number; ad: string; tip: string; donem?: string | null }[] }
 }
 
 export const getApiBase = () => api.defaults.baseURL;
