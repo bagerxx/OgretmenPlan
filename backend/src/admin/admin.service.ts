@@ -26,11 +26,7 @@ export class AdminService {
               include: {
                 ogrenmeCiktilari: {
                   orderBy: { id: 'asc' },
-                  include: {
-                    surecBilesenleri: {
-                      orderBy: { id: 'asc' }
-                    }
-                  }
+                  // surecBileseni artık tekil string alanı; ekstra include gerekmiyor
                 }
               }
             }
@@ -126,11 +122,7 @@ export class AdminService {
         tema: true,
         ogrenmeCiktilari: {
           orderBy: { id: 'asc' },
-          include: {
-            surecBilesenleri: {
-              orderBy: { id: 'asc' }
-            }
-          }
+          // surecBileseni tekil string alanı; include yok
         }
       }
     });
@@ -152,7 +144,12 @@ export class AdminService {
     const ogrenmeCiktisi = await this.prisma.ogrenmeCiktisi.findUnique({ where: { id: ogrenmeCiktisiId } });
     if (!ogrenmeCiktisi) throw new Error('Belirtilen öğrenme çıktısı bulunamadı');
     try {
-      return await this.prisma.surecBileseni.create({ data: { ogrenmeCiktisiId, ad } });
+      // Artık tekil string alanı olarak güncelliyoruz
+      // Tipler migration/generate sonrası güncellenecek; şimdilik tür denetimini geçiyoruz
+      return await (this.prisma as any).ogrenmeCiktisi.update({
+        where: { id: ogrenmeCiktisiId },
+        data: { surecBileseni: ad }
+      });
     } catch (e: any) {
       throw new Error('Süreç bileşeni eklenirken hata oluştu');
     }

@@ -146,19 +146,9 @@ model OgrenmeCiktisi {
   ad               String
 
   konuCercevesi    KonuCercevesi @relation(fields: [konuCercevesiId], references: [id], onDelete: Cascade)
-  surecBilesenleri SurecBileseni[]
+  // Süreç bileşeni artık tekil bir alan olarak tutuluyor
+  surecBileseni    String?
 
   @@map("ogrenme_ciktisi")
-}
-
-// Öğrenme çıktısına bağlı süreç bileşenleri
-model SurecBileseni {
-  id               String @id @default(cuid())
-  ogrenmeCiktisiId String
-  ad               String
-
-  ogrenmeCiktisi   OgrenmeCiktisi @relation(fields: [ogrenmeCiktisiId], references: [id], onDelete: Cascade)
-
-  @@map("surec_bileseni")
 }
 

@@ -56,7 +56,7 @@
       <p class="muted">Bir ders seçerek o derse bağlı temaları, becerileri ve kazanımları yönetebilirsiniz.</p>
     </div>
 
-    <div class="panel">
+<!--     <div class="panel">
       <h2>Tema Ekle</h2>
       <form id="temaForm" method="POST" action="/api/admin/tema">
         <input id="temaDersId" type="hidden" name="dersId" value="<%= seciliDers?.id || '' %>" />
@@ -68,7 +68,7 @@
         <input id="temaSaat" name="saat" type="number" min="1" />
         <button type="submit">Tema Oluştur</button>
       </form>
-    </div>
+    </div> -->
 
     <div class="panel">
       <h2>Konu Çerçevesi Ekle</h2>
@@ -77,7 +77,7 @@
         <label for="konuCercevesiTema">Tema</label>
         <select id="konuCercevesiTema" name="temaId" required>
           <option value="">-- Tema seçin --</option>
-          <!-- Temalar JS ile yüklenecek -->
+
         </select>
         <label for="konuCercevesiAd">Konu Çerçevesi Adı</label>
         <input id="konuCercevesiAd" name="ad" type="text" required />
@@ -101,7 +101,7 @@
     </div>
 
     <div class="panel">
-      <h2>Süreç Bileşeni Ekle</h2>
+  <h2>Süreç Bileşeni Ekle</h2>
       <form id="surecBileseniForm" method="POST" action="/api/admin/surec-bileseni">
         <input type="hidden" name="dersId" value="<%= seciliDers?.id || '' %>" />
         <label for="surecBileseniOgrenmeCiktisi">Öğrenme Çıktısı</label>
@@ -109,13 +109,13 @@
           <option value="">-- Öğrenme çıktısı seçin --</option>
           <!-- Öğrenme çıktıları JS ile yüklenecek -->
         </select>
-        <label for="surecBileseniAd">Süreç Bileşeni Adı</label>
+  <label for="surecBileseniAd">Süreç Bileşeni</label>
         <input id="surecBileseniAd" name="ad" type="text" required />
         <button type="submit">Süreç Bileşeni Ekle</button>
       </form>
     </div>
 
-    <div class="panel">
+   <!--  <div class="panel">
       <h2>Tema Alanlarını Düzenle</h2>
       <p class="muted">Bu alanları serbest metin olarak girebilirsiniz. Boş bırakırsanız değişmez.</p>
       <form id="temaAlanForm" method="POST" action="/api/admin/tema-guncelle">
@@ -123,7 +123,6 @@
         <label for="temaSecim">Tema</label>
         <select id="temaSecim" name="temaId" required>
           <option value="">-- Tema seçin --</option>
-          <!-- Temalar JS ile yüklenecek -->
         </select>
   <label for="temaAdGuncelle">Tema Adı</label>
   <input id="temaAdGuncelle" name="ad" type="text" />
@@ -141,7 +140,7 @@
         <textarea id="okurYazarlikBecerileri" name="okurYazarlikBecerileri" rows="4" placeholder="Okur yazarlık becerileri buraya..."></textarea>
         <button type="submit">Kaydet</button>
       </form>
-    </div>
+    </div> -->
 
     <div class="panel">
       <h2>Temalar ve İçerikler</h2>
@@ -173,12 +172,10 @@
                         <% kc.ogrenmeCiktilari.forEach((oc, ocIndex) => { %>
                           <div style="margin-left: 16px; margin-bottom: 4px;">
                             <span>○ <%= oc.ad %></span>
-                            <% if (oc.surecBilesenleri && oc.surecBilesenleri.length > 0) { %>
+                            <% if (oc.surecBileseni) { %>
                               <div style="margin-left: 16px;">
-                                <div class="muted">Süreç Bileşenleri:</div>
-                                <% oc.surecBilesenleri.forEach((sb, sbIndex) => { %>
-                                  <div style="margin-left: 16px;">▪ <%= sb.ad %></div>
-                                <% }) %>
+                                <div class="muted">Süreç Bileşeni:</div>
+                                <div style="margin-left: 16px;">▪ <%= oc.surecBileseni %></div>
                               </div>
                             <% } %>
                           </div>
@@ -218,12 +215,12 @@
 
       async function loadTemalar(dersId) {
         if (!dersId) {
-          temaSecim.innerHTML = '<option value="">-- Tema seçin --</option>';
-          konuCercevesiTema.innerHTML = '<option value="">-- Tema seçin --</option>';
-          ogrenmeCiktisiKonuCercevesi.innerHTML = '<option value="">-- Konu çerçevesi seçin --</option>';
-          surecBileseniOgrenmeCiktisi.innerHTML = '<option value="">-- Öğrenme çıktısı seçin --</option>';
+          if (temaSecim) temaSecim.innerHTML = '<option value="">-- Tema seçin --</option>';
+          if (konuCercevesiTema) konuCercevesiTema.innerHTML = '<option value="">-- Tema seçin --</option>';
+          if (ogrenmeCiktisiKonuCercevesi) ogrenmeCiktisiKonuCercevesi.innerHTML = '<option value="">-- Konu çerçevesi seçin --</option>';
+          if (surecBileseniOgrenmeCiktisi) surecBileseniOgrenmeCiktisi.innerHTML = '<option value="">-- Öğrenme çıktısı seçin --</option>';
           temalarList.innerHTML = '<p class="muted">Henüz tema yok.</p>';
-          temaDersId.value = '';
+          if (temaDersId) temaDersId.value = '';
           currentTemalar = [];
           
           // Tüm formlardaki hidden dersId'leri güncelle
@@ -237,13 +234,27 @@
         
         // Tema seçim alanlarını güncelle
         const temaOptions = '<option value="">-- Tema seçin --</option>' + temalar.map(t => `<option value="${t.id}">${t.sira}. ${t.ad}</option>`).join('');
-        temaSecim.innerHTML = temaOptions;
-        konuCercevesiTema.innerHTML = temaOptions;
+  if (temaSecim) temaSecim.innerHTML = temaOptions;
+  if (konuCercevesiTema) konuCercevesiTema.innerHTML = temaOptions;
         
         // Konu çerçevesi ve öğrenme çıktısı seçimlerini güncelle
         updateKonuCerceveleri(temalar);
+        // URL parametrelerinden konuCercevesiId / ogrenmeCiktisiId varsa select'lere uygula
+        try {
+          const params = new URLSearchParams(window.location.search);
+          const kcId = params.get('konuCercevesiId');
+          const ocId = params.get('ogrenmeCiktisiId');
+          if (kcId && ogrenmeCiktisiKonuCercevesi) {
+            const opt = ogrenmeCiktisiKonuCercevesi.querySelector(`option[value="${kcId}"]`);
+            if (opt) ogrenmeCiktisiKonuCercevesi.value = kcId;
+          }
+          if (ocId && surecBileseniOgrenmeCiktisi) {
+            const opt2 = surecBileseniOgrenmeCiktisi.querySelector(`option[value="${ocId}"]`);
+            if (opt2) surecBileseniOgrenmeCiktisi.value = ocId;
+          }
+        } catch {}
         
-        temaDersId.value = dersId;
+  if (temaDersId) temaDersId.value = dersId;
         updateHiddenDersIds(dersId);
 
         // Eğer URL'de temaId varsa (veya server tarafından gönderilen selectedTemaId),
@@ -252,21 +263,25 @@
           const urlTemaId = new URLSearchParams(window.location.search).get('temaId') || "<%= selectedTemaId || '' %>";
           if (urlTemaId) {
             // temaSecim (tema alanlarını dolduran ana select) için seçimi ayarla ve change tetikle
-            const temaOption = temaSecim.querySelector(`option[value="${urlTemaId}"]`);
-            if (temaOption) {
-              temaSecim.value = urlTemaId;
-              temaSecim.dispatchEvent(new Event('change'));
-            }
+                if (temaSecim) {
+                  const temaOption = temaSecim.querySelector(`option[value="${urlTemaId}"]`);
+                  if (temaOption) {
+                    temaSecim.value = urlTemaId;
+                    temaSecim.dispatchEvent(new Event('change'));
+                  }
+                }
 
-            // konuCercevesi formundaki tema select'i için de değeri ayarla
-            const kcOption = konuCercevesiTema.querySelector(`option[value="${urlTemaId}"]`);
-            if (kcOption) {
-              konuCercevesiTema.value = urlTemaId;
-              // güncel URL'yi temaid ile senkron tut
-              const newUrl = new URL(window.location);
-              newUrl.searchParams.set('temaId', urlTemaId);
-              window.history.replaceState({}, '', newUrl);
-            }
+                // konuCercevesi formundaki tema select'i için de değeri ayarla
+                if (konuCercevesiTema) {
+                  const kcOption = konuCercevesiTema.querySelector(`option[value="${urlTemaId}"]`);
+                  if (kcOption) {
+                    konuCercevesiTema.value = urlTemaId;
+                    // güncel URL'yi temaid ile senkron tut
+                    const newUrl = new URL(window.location);
+                    newUrl.searchParams.set('temaId', urlTemaId);
+                    window.history.replaceState({}, '', newUrl);
+                  }
+                }
           }
         } catch (err) {
           // ignore URL parsing errors silently
@@ -274,9 +289,9 @@
         
         // render list
         if (!temalar.length) {
-          temalarList.innerHTML = '<p class="muted">Henüz tema yok.</p>';
+          if (temalarList) temalarList.innerHTML = '<p class="muted">Henüz tema yok.</p>';
         } else {
-          temalarList.innerHTML = temalar.map(t => renderTemaHtml(t)).join('');
+          if (temalarList) temalarList.innerHTML = temalar.map(t => renderTemaHtml(t)).join('');
         }
       }
 
@@ -303,11 +318,14 @@
           }
         });
         
-        ogrenmeCiktisiKonuCercevesi.innerHTML = '<option value="">-- Konu çerçevesi seçin --</option>' + 
-          konuCerceveleri.map(kc => `<option value="${kc.id}">${kc.ad}</option>`).join('');
-        
-        surecBileseniOgrenmeCiktisi.innerHTML = '<option value="">-- Öğrenme çıktısı seçin --</option>' + 
-          ogrenmeCiktilari.map(oc => `<option value="${oc.id}">${oc.ad}</option>`).join('');
+        if (ogrenmeCiktisiKonuCercevesi) {
+          ogrenmeCiktisiKonuCercevesi.innerHTML = '<option value="">-- Konu çerçevesi seçin --</option>' + 
+            konuCerceveleri.map(kc => `<option value="${kc.id}">${kc.ad}</option>`).join('');
+        }
+        if (surecBileseniOgrenmeCiktisi) {
+          surecBileseniOgrenmeCiktisi.innerHTML = '<option value="">-- Öğrenme çıktısı seçin --</option>' + 
+            ogrenmeCiktilari.map(oc => `<option value="${oc.id}">${oc.ad}</option>`).join('');
+        }
       }
 
       function renderTemaHtml(t) {
@@ -324,10 +342,10 @@
                     ${kc.ogrenmeCiktilari.map(oc => `
                       <div style="margin-left: 16px; margin-bottom: 4px;">
                         <span>○ ${oc.ad}</span>
-                        ${oc.surecBilesenleri && oc.surecBilesenleri.length > 0 ? `
-                          <div style="margin-left: 16px;">
-                            <div class="muted">Süreç Bileşenleri:</div>
-                            ${oc.surecBilesenleri.map(sb => `<div style="margin-left: 16px;">▪ ${sb.ad}</div>`).join('')}
+                        ${oc.surecBileseni ? `
+                          <div style=\"margin-left: 16px;\">
+                            <div class=\"muted\">Süreç Bileşeni:</div>
+                            <div style=\"margin-left: 16px;\">▪ ${oc.surecBileseni}</div>
                           </div>
                         ` : ''}
                       </div>
@@ -358,7 +376,8 @@
       }
 
       // Tema seçilince form alanlarını doldur
-      temaSecim.addEventListener('change', (e) => {
+      if (temaSecim) {
+        temaSecim.addEventListener('change', (e) => {
         const temaId = e.target.value;
         
         // URL'yi güncelle ki sayfa yenilendiğinde tema seçimi korunsun
@@ -394,21 +413,56 @@
           degerler.value = tema.degerler || '';
           okurYazarlikBecerileri.value = tema.okurYazarlikBecerileri || '';
         }
-      });
+        });
+      }
 
       // Konu çerçevesi formunda tema seçimi değiştiğinde URL'yi güncelle
-      konuCercevesiTema.addEventListener('change', (e) => {
-        const temaId = e.target.value;
-        const urlParams = new URLSearchParams(window.location.search);
-        if (temaId) {
-          urlParams.set('temaId', temaId);
-        } else {
-          urlParams.delete('temaId');
-        }
-        const newUrl = new URL(window.location);
-        newUrl.search = urlParams.toString();
-        window.history.replaceState({}, '', newUrl);
-      });
+      if (konuCercevesiTema) {
+        konuCercevesiTema.addEventListener('change', (e) => {
+          const temaId = e.target.value;
+          const urlParams = new URLSearchParams(window.location.search);
+          if (temaId) {
+            urlParams.set('temaId', temaId);
+          } else {
+            urlParams.delete('temaId');
+          }
+          const newUrl = new URL(window.location);
+          newUrl.search = urlParams.toString();
+          window.history.replaceState({}, '', newUrl);
+        });
+      }
+
+      // Öğrenme çıktısı formunda konu çerçevesi seçildiğinde URL'yi güncelle
+      if (ogrenmeCiktisiKonuCercevesi) {
+        ogrenmeCiktisiKonuCercevesi.addEventListener('change', (e) => {
+          const kcId = e.target.value;
+          const urlParams = new URLSearchParams(window.location.search);
+          if (kcId) {
+            urlParams.set('konuCercevesiId', kcId);
+          } else {
+            urlParams.delete('konuCercevesiId');
+          }
+          const newUrl = new URL(window.location);
+          newUrl.search = urlParams.toString();
+          window.history.replaceState({}, '', newUrl);
+        });
+      }
+
+      // Süreç bileşeni formunda öğrenme çıktısı seçildiğinde URL'yi güncelle
+      if (surecBileseniOgrenmeCiktisi) {
+        surecBileseniOgrenmeCiktisi.addEventListener('change', (e) => {
+          const ocId = e.target.value;
+          const urlParams = new URLSearchParams(window.location.search);
+          if (ocId) {
+            urlParams.set('ogrenmeCiktisiId', ocId);
+          } else {
+            urlParams.delete('ogrenmeCiktisiId');
+          }
+          const newUrl = new URL(window.location);
+          newUrl.search = urlParams.toString();
+          window.history.replaceState({}, '', newUrl);
+        });
+      }
 
       // init
       (function(){
@@ -433,6 +487,20 @@
             if (selectedTemaId && konuCercevesiTema) {
               konuCercevesiTema.value = selectedTemaId;
             }
+            // URL'deki konuCercevesiId / ogrenmeCiktisiId değerlerini select'lere uygula
+            try {
+              const params = new URLSearchParams(window.location.search);
+              const kcId = params.get('konuCercevesiId');
+              const ocId = params.get('ogrenmeCiktisiId');
+              if (kcId && ogrenmeCiktisiKonuCercevesi) {
+                const opt = ogrenmeCiktisiKonuCercevesi.querySelector(`option[value="${kcId}"]`);
+                if (opt) ogrenmeCiktisiKonuCercevesi.value = kcId;
+              }
+              if (ocId && surecBileseniOgrenmeCiktisi) {
+                const opt2 = surecBileseniOgrenmeCiktisi.querySelector(`option[value="${ocId}"]`);
+                if (opt2) surecBileseniOgrenmeCiktisi.value = ocId;
+              }
+            } catch {}
             // temaSiraGuncelle'ü init sonrası güncelle (eğer varsa)
             if (selectedTemaId && typeof temaSiraGuncelle !== 'undefined' && temaSiraGuncelle) {
               const tema = currentTemalar.find(t => t.id === selectedTemaId);
@@ -443,23 +511,25 @@
         }
       })();
 
-      dersSelect.addEventListener('change', (e) => {
-        const id = e.target.value;
-        loadTemalar(id);
-        // URL'yi güncelle ki sayfa yenilendiğinde seçim korunsin
-        if (id) {
-          const newUrl = new URL(window.location);
-          newUrl.searchParams.set('dersId', id);
-          // Ders değiştiğinde tema seçimini temizle
-          newUrl.searchParams.delete('temaId');
-          window.history.replaceState({}, '', newUrl);
-        } else {
-          const newUrl = new URL(window.location);
-          newUrl.searchParams.delete('dersId');
-          newUrl.searchParams.delete('temaId');
-          window.history.replaceState({}, '', newUrl);
-        }
-      });
+      if (dersSelect) {
+        dersSelect.addEventListener('change', (e) => {
+          const id = e.target.value;
+          loadTemalar(id);
+          // URL'yi güncelle ki sayfa yenilendiğinde seçim korunsin
+          if (id) {
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.set('dersId', id);
+            // Ders değiştiğinde tema seçimini temizle
+            newUrl.searchParams.delete('temaId');
+            window.history.replaceState({}, '', newUrl);
+          } else {
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.delete('dersId');
+            newUrl.searchParams.delete('temaId');
+            window.history.replaceState({}, '', newUrl);
+          }
+        });
+      }
     </script>
   </main>
 </body>

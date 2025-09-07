@@ -60,7 +60,7 @@ export class AdminController {
     const { dersId, konuCercevesiId, ad } = body;
     try {
       await this.adminService.ogrenmeCiktisiEkle(konuCercevesiId, ad);
-      return res.redirect(`/api/admin?dersId=${dersId}`);
+  return res.redirect(`/api/admin?dersId=${dersId}&konuCercevesiId=${konuCercevesiId}`);
     } catch (e: any) {
       return res.status(400).send(e.message);
     }
@@ -71,7 +71,7 @@ export class AdminController {
     const { dersId, ogrenmeCiktisiId, ad } = body;
     try {
       await this.adminService.surecBileseniEkle(ogrenmeCiktisiId, ad);
-      return res.redirect(`/api/admin?dersId=${dersId}`);
+  return res.redirect(`/api/admin?dersId=${dersId}&ogrenmeCiktisiId=${ogrenmeCiktisiId}`);
     } catch (e: any) {
       return res.status(400).send(e.message);
     }
