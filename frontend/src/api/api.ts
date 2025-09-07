@@ -33,6 +33,8 @@ export async function generateHaftalar(payload: {
   birinciaraTatil?: any; 
   ikinciAraTatil?: any; 
   somestrTatil?: any; 
+  ramazanBaslangic?: string;
+  kurbanBaslangic?: string;
 }) {
   // NestJS backend uses a global prefix '/api' (see backend/src/main.ts)
   const { data } = await api.post('/api/hafta/generate', payload)

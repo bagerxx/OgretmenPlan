@@ -25,6 +25,8 @@ interface HaftaOlusturmaForm {
   birinciaraTatil: TatilDonemi
   ikinciAraTatil: TatilDonemi
   somestrTatil: TatilDonemi
+  ramazanBaslangic?: Date | undefined
+  kurbanBaslangic?: Date | undefined
 }
 
 interface TatilDonemi {
@@ -46,10 +48,12 @@ export default function HaftaOlusturmaScreen() {
       baslangic: new Date(2026, 2, 16), // 20 Mart 2026
       bitis: new Date(2026, 2, 20) // 26 Mart 2026
     },
-    somestrTatil: { 
+  somestrTatil: { 
       baslangic: new Date(2026, 0, 19), // 19 Ocak 2026
       bitis: new Date(2026, 0, 30) // 30 Ocak 2026
-    }
+  },
+  ramazanBaslangic: new Date(2026, 2, 19),
+  kurbanBaslangic: new Date(2026, 4, 26)
   })
 
   const [showDatePicker, setShowDatePicker] = useState<{
@@ -146,10 +150,12 @@ export default function HaftaOlusturmaScreen() {
           baslangic: form.ikinciAraTatil.baslangic.toISOString(),
           bitis: form.ikinciAraTatil.bitis.toISOString()
         } : undefined,
-        somestrTatil: form.somestrTatil.baslangic && form.somestrTatil.bitis ? {
+  somestrTatil: form.somestrTatil.baslangic && form.somestrTatil.bitis ? {
           baslangic: form.somestrTatil.baslangic.toISOString(),
           bitis: form.somestrTatil.bitis.toISOString()
-        } : undefined
+  } : undefined,
+  ramazanBaslangic: form.ramazanBaslangic ? form.ramazanBaslangic.toISOString() : undefined,
+  kurbanBaslangic: form.kurbanBaslangic ? form.kurbanBaslangic.toISOString() : undefined
       })
 
       setResult(result)
@@ -176,10 +182,12 @@ export default function HaftaOlusturmaScreen() {
         baslangic: new Date(2026, 2, 20), // 20 Mart 2026
         bitis: new Date(2026, 2, 26) // 26 Mart 2026
       },
-      somestrTatil: { 
+  somestrTatil: { 
         baslangic: new Date(2026, 0, 19), // 19 Ocak 2026
         bitis: new Date(2026, 0, 30) // 30 Ocak 2026
-      }
+  },
+  ramazanBaslangic: undefined,
+  kurbanBaslangic: undefined
     })
     setResult(null)
   }
@@ -301,6 +309,31 @@ export default function HaftaOlusturmaScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+          </View>
+
+          {/* Dini Bayramlar (sadece başlangıç) */}
+          <View style={styles.tatilGroup}>
+            <Text style={styles.tatilTitle}>Ramazan Bayramı Başlangıcı (Arife dahil)</Text>
+            <TouchableOpacity
+              style={styles.dateButton}
+              onPress={() => showDatePickerFor('ramazanBaslangic')}
+            >
+              <Text style={styles.dateButtonText}>
+                {formatDate(form.ramazanBaslangic)}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.tatilGroup}>
+            <Text style={styles.tatilTitle}>Kurban Bayramı Başlangıcı (Arife dahil)</Text>
+            <TouchableOpacity
+              style={styles.dateButton}
+              onPress={() => showDatePickerFor('kurbanBaslangic')}
+            >
+              <Text style={styles.dateButtonText}>
+                {formatDate(form.kurbanBaslangic)}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 

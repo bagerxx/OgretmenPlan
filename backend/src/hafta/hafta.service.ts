@@ -24,6 +24,10 @@ export const CreateHaftalarSchema = z.object({
     baslangic: z.string().pipe(z.coerce.date()),
     bitis: z.string().pipe(z.coerce.date())
   }).optional()
+  ,
+  // Dini bayramlar (sadece başlangıç tarihi; arife dahil)
+  ramazanBaslangic: z.string().pipe(z.coerce.date()).optional(),
+  kurbanBaslangic: z.string().pipe(z.coerce.date()).optional()
 })
 
 export type CreateHaftalarInput = z.infer<typeof CreateHaftalarSchema>
@@ -54,7 +58,9 @@ export class HaftaService {
   bitisTarihi, 
       birinciaraTatil,
       ikinciAraTatil,
-      somestrTatil
+  somestrTatil,
+  ramazanBaslangic,
+  kurbanBaslangic
     } = data
 
     // Gelen payload tarihlerini Date objesine çevir (controller genellikle string gönderir)
@@ -72,6 +78,17 @@ export class HaftaService {
     const somestrTatilDate = somestrTatil
       ? { baslangic: toDate(somestrTatil.baslangic), bitis: toDate(somestrTatil.bitis) }
       : undefined
+
+    // Dini bayram aralıklarını oluştur (arife dahil: Ramazan 4 gün, Kurban 5 gün)
+    const addDays = (d: Date, days: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + days)
+    const ramazanRange = ramazanBaslangic ? {
+      baslangic: toDate(ramazanBaslangic),
+      bitis: addDays(toDate(ramazanBaslangic), 3) // 4 gün (0..3)
+    } : undefined
+    const kurbanRange = kurbanBaslangic ? {
+      baslangic: toDate(kurbanBaslangic),
+      bitis: addDays(toDate(kurbanBaslangic), 4) // 5 gün (0..4)
+    } : undefined
 
     console.log('[HaftaService] Başlangıç parametreleri:', {
       baslangicTarihi: baslangicDate.toLocaleDateString('tr-TR'),
@@ -111,9 +128,10 @@ export class HaftaService {
       bitis: bitis.toLocaleDateString('tr-TR')
     })
 
-    const haftalar: HaftaData[] = []
-    let currentDate = new Date(baslangic)
-    let haftaNo = 1
+  const haftalar: HaftaData[] = []
+  let currentDate = new Date(baslangic)
+  let haftaNo = 1
+  let tatilHaftaSayisiCounter = 0
 
     // Başlangıçtan bitişe kadar tüm haftaları oluştur
     while (currentDate <= bitis) {
@@ -127,28 +145,36 @@ export class HaftaService {
       const haftaTipi = this.belirleHaftaTipi(haftaBaslangic, haftaBitis, {
         birinciaraTatil: birinciaraTatilDate,
         ikinciAraTatil: ikinciAraTatilDate,
-        somestrTatil: somestrTatilDate
+        somestrTatil: somestrTatilDate,
+        ramazan: ramazanRange,
+        kurban: kurbanRange
       })
 
-      // 2. Dönem tipini belirle (sömestr tatili baz alınarak)
-  const donemTipi = this.belirleDonemTipi(haftaBaslangic, somestrTatilDate)
+      // Tatil haftalarını hiç oluşturma (DB'ye de gitmeyecek), hafta numarasını artırma
+      if (haftaTipi === 'TATIL') {
+        tatilHaftaSayisiCounter++
+      } else {
+        // 2. Dönem tipini belirle (sömestr tatili baz alınarak)
+        const donemTipi = this.belirleDonemTipi(haftaBaslangic, somestrTatilDate)
 
-      // Hafta verisini oluştur
-      haftalar.push({
-        haftaNo,
-        baslamaTarihi: toUtcDateOnly(haftaBaslangic),
-        bitisTarihi: toUtcDateOnly(haftaBitis),
-        tip: haftaTipi,
-        donem: donemTipi,
-        ad: this.createHaftaAd(haftaBaslangic, haftaBitis),
-        yilId: yilData.id
-      })
+        // Hafta verisini oluştur
+        haftalar.push({
+          haftaNo,
+          baslamaTarihi: toUtcDateOnly(haftaBaslangic),
+          bitisTarihi: toUtcDateOnly(haftaBitis),
+          tip: haftaTipi,
+          donem: donemTipi,
+          ad: this.createHaftaAd(haftaBaslangic, haftaBitis),
+          yilId: yilData.id
+        })
 
-      console.log(`[HaftaService] ${haftaNo}. hafta: ${haftaBaslangic.toLocaleDateString('tr-TR')} - ${haftaBitis.toLocaleDateString('tr-TR')} | Tip: ${haftaTipi} | Dönem: ${donemTipi}`)
+        console.log(`[HaftaService] ${haftaNo}. hafta: ${haftaBaslangic.toLocaleDateString('tr-TR')} - ${haftaBitis.toLocaleDateString('tr-TR')} | Tip: ${haftaTipi}`)
+
+        haftaNo++
+      }
 
       // Bir sonraki haftaya geç (7 gün)
       currentDate.setDate(currentDate.getDate() + 7)
-      haftaNo++
     }
 
     // Haftaları toplu oluştur (donem optional olabilir -> null gönder)
@@ -160,7 +186,7 @@ export class HaftaService {
         bitisTarihi: h.bitisTarihi,
         tip: h.tip,
         donem: (h.donem ?? null) as any,
-  ad: h.ad,
+        ad: h.ad,
         yilId: h.yilId
       })) as any
     })
@@ -168,18 +194,19 @@ export class HaftaService {
     const gunSayilari = this.calculateWorkingDays(haftalar)
 
     console.log('[HaftaService] Sonuç özeti:', {
-      toplamHafta: haftalar.length,
+      toplamHafta: haftalar.length + tatilHaftaSayisiCounter,
       dersHaftasi: haftalar.filter(h => h.tip === 'DERS').length,
-      tatilHaftasi: haftalar.filter(h => h.tip === 'TATIL').length,
+      tatilHaftasi: tatilHaftaSayisiCounter,
       birinciDonem: haftalar.filter(h => h.donem === 'BIRINCI_DONEM').length,
       ikinciDonem: haftalar.filter(h => h.donem === 'IKINCI_DONEM').length
     })
 
     return {
-      message: `${haftalar.length} hafta başarıyla oluşturuldu`,
-      oluşturulanHaftaSayisi: haftalar.length,
+  message: `${haftalar.length} hafta (tatiller hariç) başarıyla oluşturuldu`,
+  oluşturulanHaftaSayisi: haftalar.length + tatilHaftaSayisiCounter,
+  kaydedilenHaftaSayisi: haftalar.length,
       dersHaftaSayisi: haftalar.filter(h => h.tip === 'DERS').length,
-      tatilHaftaSayisi: haftalar.filter(h => h.tip === 'TATIL').length,
+  tatilHaftaSayisi: tatilHaftaSayisiCounter,
       sinavHaftaSayisi: haftalar.filter(h => h.tip === 'SINAV').length,
       birinciDonemHaftaSayisi: haftalar.filter(h => h.donem === 'BIRINCI_DONEM').length,
       ikinciDonemHaftaSayisi: haftalar.filter(h => h.donem === 'IKINCI_DONEM').length,
@@ -268,9 +295,11 @@ export class HaftaService {
   private belirleHaftaTipi(haftaBaslangic: Date, haftaBitis: Date, tatilParams: {
     birinciaraTatil?: { baslangic: Date, bitis: Date },
     ikinciAraTatil?: { baslangic: Date, bitis: Date },
-    somestrTatil?: { baslangic: Date, bitis: Date }
+  somestrTatil?: { baslangic: Date, bitis: Date },
+  ramazan?: { baslangic: Date, bitis: Date },
+  kurban?: { baslangic: Date, bitis: Date }
   }): HaftaTipi {
-    const { birinciaraTatil, ikinciAraTatil, somestrTatil } = tatilParams
+  const { birinciaraTatil, ikinciAraTatil, somestrTatil, ramazan, kurban } = tatilParams
 
     // Birinci ara tatil kontrolü
     if (birinciaraTatil && this.haftaTatilIleKesisiyorMu(haftaBaslangic, haftaBitis, birinciaraTatil.baslangic, birinciaraTatil.bitis)) {
@@ -287,8 +316,55 @@ export class HaftaService {
       return 'TATIL'
     }
 
+    // Dini bayramlar (yalnızca hafta içi 2 günden fazla ise tatil say)
+    const weekdayOverlap = (range?: { baslangic: Date, bitis: Date }) => {
+      if (!range) return 0
+      return this.countWeekdayOverlap(haftaBaslangic, haftaBitis, range.baslangic, range.bitis)
+    }
+
+    const ramazanWeekdays = weekdayOverlap(ramazan)
+    const kurbanWeekdays = weekdayOverlap(kurban)
+    // mevcut resmi tatillerle çakışan kısımları düş
+    const coveredByExisting = (range?: { baslangic: Date, bitis: Date }) => {
+      if (!range) return 0
+      const a = this.countWeekdayOverlap(haftaBaslangic, haftaBitis, range.baslangic, range.bitis)
+      const b = birinciaraTatil ? this.countWeekdayOverlap(range.baslangic, range.bitis, birinciaraTatil.baslangic, birinciaraTatil.bitis) : 0
+      const c = ikinciAraTatil ? this.countWeekdayOverlap(range.baslangic, range.bitis, ikinciAraTatil.baslangic, ikinciAraTatil.bitis) : 0
+      const d = somestrTatil ? this.countWeekdayOverlap(range.baslangic, range.bitis, somestrTatil.baslangic, somestrTatil.bitis) : 0
+      // sadece bu hafta içi kesişen kısmın, mevcut tatillerle kesişen hafta içi günlerini düş
+      // aşırı düşmeyi engellemek için min al
+      return Math.min(a, b + c + d)
+    }
+    const ramazanResidual = ramazanWeekdays - coveredByExisting(ramazan)
+    const kurbanResidual = kurbanWeekdays - coveredByExisting(kurban)
+    if (ramazanResidual > 2 || kurbanResidual > 2) {
+      return 'TATIL'
+    }
+
     // Diğer durumlarda DERS
     return 'DERS'
+  }
+
+  /** İki tarih aralığı arasında (Pzt-Cuma) çakışan gün sayısını döndürür */
+  private countWeekdayOverlap(weekStart: Date, weekEnd: Date, rangeStart: Date, rangeEnd: Date): number {
+    // normalize to date-only
+    const norm = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    let start = norm(weekStart)
+    let end = norm(weekEnd)
+    const rs = norm(rangeStart)
+    const re = norm(rangeEnd)
+    // intersect [start,end] with [rs,re]
+    const is = start > rs ? start : rs
+    const ie = end < re ? end : re
+    if (is > ie) return 0
+    let count = 0
+    const cur = new Date(is)
+    while (cur <= ie) {
+      const day = cur.getDay()
+      if (day >= 1 && day <= 5) count++
+      cur.setDate(cur.getDate() + 1)
+    }
+    return count
   }
 
   /**

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -20,44 +21,141 @@ export class AdminService {
         temalar: {
           orderBy: { sira: 'asc' },
           include: {
-            beceriler: { orderBy: { sira: 'asc' } },
-            kazanimlar: { orderBy: { sira: 'asc' } }
+            konuCerceveleri: {
+              orderBy: { id: 'asc' },
+              include: {
+                ogrenmeCiktilari: {
+                  orderBy: { id: 'asc' },
+                  include: {
+                    surecBilesenleri: {
+                      orderBy: { id: 'asc' }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
     });
   }
 
-  async temaEkle(dersId: string, ad: string, sira: number) {
+  async temaEkle(dersId: string, ad: string, sira: number, saat?: number) {
     const ders = await this.prisma.ders.findUnique({ where: { id: dersId } });
     if (!ders) throw new Error('Belirtilen ders bulunamadı');
     try {
-      return await this.prisma.tema.create({ data: { dersId, ad, sira } });
+      // Eğer aynı derste aynı veya daha büyük sıralara sahip temalar varsa,
+      // onların `sira` değerlerini 1 artırarak yeni tema için yer açalım.
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.tema.updateMany({
+          where: {
+            dersId,
+            sira: { gte: sira }
+          },
+          data: {
+            sira: { increment: 1 }
+          }
+        });
+        return tx.tema.create({ data: { dersId, ad, sira, saat } });
+      });
     } catch (e: any) {
-      if (e.code === 'P2002') throw new Error('Aynı derste bu sıra zaten kullanılmış');
+      // Eğer updateMany + create sırasında unique hatası alındıysa,
+      // yoğun eşzamanlılık veya sıra index davranışı nedeniyle olabilir.
+      // Fallback: aynı derste sira >= yeni sira olan kayıtları ters sırayla tek tek güncelleyip tekrar deneyelim.
+      if (e.code === 'P2002') {
+        try {
+          return await this.prisma.$transaction(async (tx) => {
+            const affected = await tx.tema.findMany({
+              where: { dersId, sira: { gte: sira } },
+              orderBy: { sira: 'desc' }
+            });
+            for (const t of affected) {
+              await tx.tema.update({ where: { id: t.id }, data: { sira: t.sira + 1 } });
+            }
+            return tx.tema.create({ data: { dersId, ad, sira, saat } });
+          });
+        } catch (e2: any) {
+          // Eğer yine hata olursa daha açıklayıcı döndürelim
+          throw new Error(e2?.message || 'Tema eklenirken beklenmeyen bir hata oluştu');
+        }
+      }
       throw e;
     }
   }
 
-  async beceriEkle(temaId: string, ad: string, sira: number, saatSuresi: number) {
+  async temaGuncelle(temaId: string, data: {
+    ad?: string,
+    sira?: number,
+    saat?: number | null,
+    olcmeDegerlendirme?: string | null,
+    sosyalDuygusalBeceriler?: string | null,
+    degerler?: string | null,
+    okurYazarlikBecerileri?: string | null,
+  }) {
+    const tema = await this.prisma.tema.findUnique({ where: { id: temaId } });
+    if (!tema) throw new Error('Tema bulunamadı');
+    return this.prisma.tema.update({
+      where: { id: temaId },
+      data: {
+        ad: data.ad ?? undefined,
+        sira: data.sira ?? undefined,
+        saat: data.saat ?? undefined,
+        olcmeDegerlendirme: data.olcmeDegerlendirme ?? undefined,
+        sosyalDuygusalBeceriler: data.sosyalDuygusalBeceriler ?? undefined,
+        degerler: data.degerler ?? undefined,
+        okurYazarlikBecerileri: data.okurYazarlikBecerileri ?? undefined,
+      }
+    });
+  }
+
+  // Konu Çerçevesi işlemleri
+  async konuCercevesiEkle(temaId: string, ad: string) {
     const tema = await this.prisma.tema.findUnique({ where: { id: temaId } });
     if (!tema) throw new Error('Belirtilen tema bulunamadı');
     try {
-      return await this.prisma.beceri.create({ data: { temaId, ad, sira, saatSuresi } });
+      return await this.prisma.konuCercevesi.create({ data: { temaId, ad } });
     } catch (e: any) {
-      if (e.code === 'P2002') throw new Error('Bu temada aynı sıra zaten var');
-      throw e;
+      throw new Error('Konu çerçevesi eklenirken hata oluştu');
     }
   }
 
-  async kazanimEkle(temaId: string, ad: string, sira: number, saatSuresi: number) {
-    const tema = await this.prisma.tema.findUnique({ where: { id: temaId } });
-    if (!tema) throw new Error('Belirtilen tema bulunamadı');
+  async konuCercevesiById(id: string) {
+    return this.prisma.konuCercevesi.findUnique({
+      where: { id },
+      include: {
+        tema: true,
+        ogrenmeCiktilari: {
+          orderBy: { id: 'asc' },
+          include: {
+            surecBilesenleri: {
+              orderBy: { id: 'asc' }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // Öğrenme Çıktısı işlemleri
+  async ogrenmeCiktisiEkle(konuCercevesiId: string, ad: string) {
+    const konuCercevesi = await this.prisma.konuCercevesi.findUnique({ where: { id: konuCercevesiId } });
+    if (!konuCercevesi) throw new Error('Belirtilen konu çerçevesi bulunamadı');
     try {
-      return await this.prisma.kazanim.create({ data: { temaId, ad, sira, saatSuresi } });
+      return await this.prisma.ogrenmeCiktisi.create({ data: { konuCercevesiId, ad } });
     } catch (e: any) {
-      if (e.code === 'P2002') throw new Error('Bu temada aynı sıra zaten var');
-      throw e;
+      throw new Error('Öğrenme çıktısı eklenirken hata oluştu');
     }
   }
+
+  // Süreç Bileşeni işlemleri
+  async surecBileseniEkle(ogrenmeCiktisiId: string, ad: string) {
+    const ogrenmeCiktisi = await this.prisma.ogrenmeCiktisi.findUnique({ where: { id: ogrenmeCiktisiId } });
+    if (!ogrenmeCiktisi) throw new Error('Belirtilen öğrenme çıktısı bulunamadı');
+    try {
+      return await this.prisma.surecBileseni.create({ data: { ogrenmeCiktisiId, ad } });
+    } catch (e: any) {
+      throw new Error('Süreç bileşeni eklenirken hata oluştu');
+    }
+  }
+
 }

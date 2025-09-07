@@ -22,7 +22,7 @@ async function bootstrap() {
   const server = (app.getHttpAdapter().getInstance() as any);
   server.get('/admin', (_req: any, res: any) => res.redirect('/api/admin'));
 
-  await app.listen(3000);
+  await app.listen(3000,'0.0.0.0');
   console.log('🚀 Backend çalışıyor: http://localhost:3000/api');
 }
 bootstrap();
